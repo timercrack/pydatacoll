@@ -1,0 +1,151 @@
+from utils import logger as my_logger
+import redis
+import asyncio
+import aioredis
+import datetime
+import ujson as json
+from abc import ABCMeta, abstractmethod
+
+logger = my_logger.getLogger('BaseDevice')
+
+
+class BaseDevice(object, metaclass=ABCMeta):
+    def __init__(self, io_loop: asyncio.AbstractEventLoop, redis_pool: aioredis.RedisPool, device_info: dict):
+        self.connected = False
+        self.device_info = device_info
+        self.device_id = self.device_info['id']
+        self.io_loop = io_loop
+        self.redis_pool = redis_pool
+        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+
+    async def save_frame(self, frame, send=True):
+        try:
+            with (await self.redis_pool) as redis_client:
+                await redis_client.rpush("LST:FRAME:{}".format(self.device_id),
+                                         '{time},{type},{frame}'.format(
+                                             time=datetime.datetime.now().isoformat(sep=' '),
+                                             type="send" if send is True else "recv",
+                                             frame=frame.hex()))
+        except Exception as e:
+            logger.error("device[%s] save_frame failed: %s", self.device_id, repr(e))
+
+    # 召测
+    async def call_data(self, term_id, item_id):
+        try:
+            if not self.connected:
+                raise Exception('device not connected!')
+            with (await self.redis_pool) as redis_client:
+                term_item = await redis_client.hgetall(
+                    'HS:TERM_ITEM:{term_id}:{item_id}'.format(term_id=term_id, item_id=item_id))
+                logger.debug('device[%s] call_data, term_item=%s', self.device_id, term_item)
+                if not term_item:
+                    logger.error('device[%s] HS:TERM_ITEM:{%s}:{%s} not found!', self.device_id, term_id, item_id)
+                    return
+                frame = self.prepare_call_frame(term_item)
+                await self.send_frame(frame)
+        except Exception as e:
+            logger.error('device[%s] call_data failed: %s', self.device_id, repr(e))
+
+    # 控制
+    async def ctrl_data(self, term_id, item_id, value):
+        try:
+            if not self.connected:
+                raise Exception('device not connected!')
+            with (await self.redis_pool) as redis_client:
+                term_item = await redis_client.hgetall(
+                    'HS:TERM_ITEM:{term_id}:{item_id}'.format(term_id=term_id, item_id=item_id))
+                logger.debug('device[%s] ctrl_data, term_item=%s, value=%s', self.device_id, term_item, value)
+                if not term_item:
+                    logger.error('device[%s] HS:TERM_ITEM:{%s}:{%s} not found!', self.device_id, term_id, item_id)
+                    return
+                frame = self.prepare_ctrl_frame(term_item, value)
+                await self.send_frame(frame)
+        except Exception as e:
+            logger.error('device[%s] ctrl_data failed: %s', self.device_id, repr(e))
+
+    # TODO: fixme
+    def change_device_status(self, on_line):
+        """
+        :param on_line: boolean
+        :return: None
+        """
+        if self.redis_client.exists('HS:DEVICE:{}'.format(self.device_id)):
+            self.redis_client.hset('HS:DEVICE:{}'.format(self.device_id), 'status', 'on' if on_line else 'off')
+        self.connected = on_line
+
+    async def process_data(self, data_pairs, method='data'):
+        """
+        :param data_pairs: data tuple->(time, protocol_code, value)
+        :param method: data process method: 'normal', 'call', 'ctrl'
+        :return: None
+        """
+        if not data_pairs:
+            return
+        try:
+            with (await self.redis_pool) as redis_client:
+                for data_time, protocol_code, data_value in data_pairs:
+                    map_key = 'HS:MAPPING:{}:{}:{}'.format(
+                        self.device_info['protocol'].upper(), self.device_id, protocol_code)
+                    term_item = await redis_client.hgetall(map_key)
+                    if not term_item:
+                        logger.debug("DEVICE[%s] precess_data: can't found term_item, key=%s", self.device_id, map_key)
+                        continue
+                    if 'coefficient' in term_item and 'base_val' in term_item:
+                        data_value = data_value * float(term_item['coefficient']) + float(term_item['base_val'])
+                    json_data = json.dumps((data_time.isoformat(sep=' '), data_value))
+                    pub_channel = 'CHANNEL:DEVICE_{}:{}:{}:{}'.format(
+                        method.upper(), self.device_id, term_item['term_id'], term_item['item_id'])
+                    rst = await redis_client.publish(pub_channel, json_data)
+                    logger.debug('pub to %s, val=%s, rst=%s', pub_channel, json_data, rst)
+                    if method == 'data':
+                        data_key = "LST:DATA:{}:{}:{}".format(self.device_id, term_item['term_id'], term_item['item_id'])
+                        await redis_client.rpush(data_key, json_data)
+                        # if check_result != 'OK':
+                        #     warn_msg = json.dumps(
+                        #         {'warn_msg': check_result, 'device_id': self.device_id, 'term_id': term_item['term_id'],
+                        #          'item_id': term_item['item_id'], 'time': data_time, 'value': data_value})
+                        #     await redis_client.publish('CHANNEL:WARNING', warn_msg)
+        except Exception as e:
+            logger.exception(e)
+
+    @abstractmethod
+    def fresh_task(self, term_id, item_id, delete=False):
+        pass
+
+    @abstractmethod
+    async def run_task(self):
+        """
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    async def send_frame(self, frame, check=True):
+        """
+        :param frame: frame send to remote device
+        :param check: directly send or save to send buffer
+        :return: None
+        """
+        pass
+
+    @abstractmethod
+    def prepare_call_frame(self, term_item_dict):
+        """
+        :param term_item_dict: redis data, key is HS:TERM_ITEM:{term_id}:{item_id}
+        :return: frame used in call self.send_frame
+        """
+        pass
+
+    @abstractmethod
+    def prepare_ctrl_frame(self, term_item_dict, value):
+        """
+        :param term_item_dict: redis data, key is HS:TERM_ITEM:{term_id}:{item_id}
+        :param value: ctrl value
+        :return: frame used in call self.send_frame
+        """
+        pass
+
+    @abstractmethod
+    def disconnect(self, reconnect=False):
+        # a = redis.StrictRedis(host='pub-redis-10152.dal-05.1.sl.garantiadata.com', port=10152, password='jeffchen')
+        pass
