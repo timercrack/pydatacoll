@@ -2,16 +2,16 @@ import asyncio
 from collections import deque
 import aioredis
 
-from protocols import BaseDevice
-from utils import logger as my_logger
+from pydatacoll.protocols import BaseDevice
+import pydatacoll.utils.logger as my_logger
 from .frame import *
 
 logger = my_logger.getLogger('IEC104Device')
 
 
 class IEC104Device(BaseDevice):
-    def __init__(self, io_loop: asyncio.AbstractEventLoop, redis_pool: aioredis.RedisPool, device_info: dict):
-        super(IEC104Device, self).__init__(io_loop, redis_pool, device_info)
+    def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop, redis_pool: aioredis.RedisPool):
+        super(IEC104Device, self).__init__(device_info, io_loop, redis_pool)
         self.coll_interval = datetime.timedelta(minutes=15)
         self.ssn = 0
         self.rsn = 0
@@ -32,7 +32,6 @@ class IEC104Device(BaseDevice):
         try:
             if self.reconnect_handler:
                 self.reconnect_handler = None
-            self.disconnect()
             self.user_canceled = False
             self.reader, self.writer = await asyncio.wait_for(
                 asyncio.open_connection(self.device_info['ip'], self.device_info['port'], loop=self.io_loop),

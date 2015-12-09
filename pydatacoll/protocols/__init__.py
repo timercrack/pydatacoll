@@ -1,21 +1,29 @@
-from utils import logger as my_logger
-import redis
 import asyncio
-import aioredis
 import datetime
-import ujson as json
+
+import aioredis
+import functools
+import redis
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 from abc import ABCMeta, abstractmethod
+
+from pydatacoll.utils import logger as my_logger
 
 logger = my_logger.getLogger('BaseDevice')
 
 
 class BaseDevice(object, metaclass=ABCMeta):
-    def __init__(self, io_loop: asyncio.AbstractEventLoop, redis_pool: aioredis.RedisPool, device_info: dict):
+    def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop, redis_pool: aioredis.RedisPool):
         self.connected = False
         self.device_info = device_info
         self.device_id = self.device_info['id']
-        self.io_loop = io_loop
-        self.redis_pool = redis_pool
+        self.io_loop = io_loop or asyncio.get_event_loop()
+        self.redis_pool = redis_pool or self.io_loop.run_until_complete(
+            functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
 
     async def save_frame(self, frame, send=True):

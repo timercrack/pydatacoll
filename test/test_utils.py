@@ -1,5 +1,6 @@
 import unittest
-from utils.func_container import *
+
+from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
 
 
 class UtilTest(unittest.TestCase):

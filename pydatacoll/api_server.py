@@ -1,17 +1,20 @@
-import ujson as json
+try:
+    import ujson as json
+except ImportError:
+    import json
 import asyncio
-import aioredis
 import functools
+import aioredis
 # import api_hour
 from aiohttp import web
 import redis
 
-from utils import logger as my_logger
-from utils.func_container import *
-from utils.json_response import JSON
-from resources.protocol import *
+import pydatacoll.utils.logger as my_logger
+from pydatacoll.utils.json_response import JSON
+from pydatacoll.resources.protocol import *
+from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
 
-logger = my_logger.getLogger('api_server')
+logger = my_logger.getLogger('APIServer')
 HANDLER_TIME_OUT = 15
 
 
@@ -25,9 +28,6 @@ class APIServer(ParamFunctionContainer):
             functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10,
                               encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
-        # self.redis_pool = self.io_loop.run_until_complete(
-        #     functools.partial(aioredis.create_pool, ('115.28.72.148', 6379), db=1, minsize=5, maxsize=10,
-        #                       encoding='utf-8', password='jeffchen'))
         self._add_router()
 
     def _add_router(self):
@@ -553,7 +553,7 @@ class APIServer(ParamFunctionContainer):
             logger.exception(e)
             logger.error('device_call failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
-                self.io_loop.run_until_complete(redis_client.unsubscribe(channel_name))
+                await redis_client.unsubscribe(channel_name)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='POST', url=r'/api/v1/device_ctrl')
@@ -598,7 +598,7 @@ class APIServer(ParamFunctionContainer):
             logger.exception(e)
             logger.error('device_ctrl failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
-                self.io_loop.run_until_complete(redis_client.unsubscribe(channel_name))
+                await redis_client.unsubscribe(channel_name)
             return web.Response(status=400, text=repr(e))
 
 # class Container(api_hour.Container):

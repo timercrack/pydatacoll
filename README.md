@@ -1,6 +1,14 @@
 # pydatacoll
 
-python写的数据采集程序，包含：
-WEB服务，提供配置页面和通用API
-采集设备管理，与采集设备通讯，采集数据
-通讯规约解析
+data collect server system written in Python, include：
+
+* web server, offer general CRUD operation and REST API
+* device manager, send/coll data from data provider(meter)
+* multi protocols support(binary data build/parser)
+
+**WARNING: this project is under alpha develop status, code struct and api interface maybe change in future!**
+
+## TODO
+1. add REST API doc im pydatacoll.readthedocs.org
+2. finish "plugins.db_save" module
+3. and so on..

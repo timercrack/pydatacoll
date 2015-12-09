@@ -1,10 +1,10 @@
-from abc import abstractmethod
-import functools
 import asyncio
+import functools
+from abc import abstractmethod, ABCMeta
 import aioredis
 
-from utils.func_container import *
-from utils import logger as my_logger
+import pydatacoll.utils.logger as my_logger
+from pydatacoll.utils.func_container import ParamFunctionContainer
 
 logger = my_logger.getLogger('BaseModule')
 

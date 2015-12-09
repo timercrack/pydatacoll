@@ -1,6 +1,8 @@
 import importlib
-from plugins import BaseModule, param_function
-from utils import logger as my_logger
+
+from pydatacoll.plugins import BaseModule
+from pydatacoll.utils.func_container import param_function
+import pydatacoll.utils.logger as my_logger
 
 logger = my_logger.getLogger('DeviceManager')
 
@@ -59,10 +61,10 @@ class DeviceManager(BaseModule):
             protocol_class = self.protocol_list.get(protocol)
             if protocol_class is None:
                 importlib.invalidate_caches()
-                module = importlib.import_module('protocols.{}.device'.format(protocol.upper()))
+                module = importlib.import_module('pydatacoll.protocols.{}.device'.format(protocol))
                 protocol_class = self.protocol_list[protocol] = getattr(module, '{}Device'.format(protocol.upper()))
                 logger.info('fresh_device new protocol %s registered', protocol_class.__name__)
-            self.device_list[device_id] = protocol_class(self.io_loop, self.redis_pool, device_dict)
+            self.device_list[device_id] = protocol_class(device_dict, self.io_loop, self.redis_pool)
         except Exception as ee:
             logger.error('fresh_device failed: %s', repr(ee), exc_info=True)
 

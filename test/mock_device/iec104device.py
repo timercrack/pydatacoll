@@ -3,8 +3,9 @@ from collections import defaultdict
 from collections import deque
 import redis
 
-from protocols.IEC104.frame import *
-from utils import logger as my_logger
+import pydatacoll.utils.logger as my_logger
+from pydatacoll.protocols.iec104.frame import *
+from . import mock_data
 
 logger = my_logger.getLogger('MockIEC104')
 
@@ -51,6 +52,7 @@ class IEC104Device(asyncio.Protocol):
         self.stop_timer(IECParam.T1)
         self.stop_timer(IECParam.T2)
         self.stop_timer(IECParam.T3)
+        self.frame_list[self.device_id].clear()
 
     def inc_ssn(self):
         self.ssn = self.ssn + 1 if self.ssn < 32767 else 0
@@ -293,6 +295,7 @@ class IEC104Device(asyncio.Protocol):
             self.send_frame(frame)
 
 if __name__ == '__main__':
+    mock_data.generate()
     loop = asyncio.get_event_loop()
     server_list = []
     for idx in range(5):
