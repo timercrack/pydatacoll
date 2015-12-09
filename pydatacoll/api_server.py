@@ -1,3 +1,4 @@
+from collections import defaultdict
 try:
     import ujson as json
 except ImportError:
@@ -49,6 +50,21 @@ class APIServer(ParamFunctionContainer):
         except Exception as e:
             logger.error('_find_keys failed: %s', repr(e), exc_info=True)
         return all_keys
+
+    @param_function(method='GET', url=r'/')
+    async def get_index(self, request):
+        doc_list = ['pydatacoll server is running, API is:\n']
+        method_dict = defaultdict(list)
+        for route in self.web_app.router.routes():
+            method_dict[route.method].append('method: {:<8} URL: {}://{}{}'.format(
+                route.method, request.scheme, request.host,
+                route._formatter if hasattr(route, '_formatter') else route._path),
+            )
+        doc_list.append('\n'.join(sorted(method_dict['GET'])))
+        doc_list.append('\n'.join(sorted(method_dict['POST'])))
+        doc_list.append('\n'.join(sorted(method_dict['PUT'])))
+        doc_list.append('\n'.join(sorted(method_dict['DELETE'])))
+        return web.Response(text='\n'.join(doc_list))
 
     @param_function(method='GET', url=r'/api/v1/device_protocols')
     async def get_device_protocol_list(self, request):
