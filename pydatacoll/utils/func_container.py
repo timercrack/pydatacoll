@@ -16,7 +16,7 @@ def param_function(**out_kwargs):
     return _rest_handler
 
 
-class ParamFunctionContainer(metaclass=ABCMeta):
+class ParamFunctionContainer(object, metaclass=ABCMeta):
     def __init__(self):
         self.module_arg_dict = dict()
         self._collect_all()
