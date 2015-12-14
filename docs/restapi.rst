@@ -4,7 +4,7 @@ RESTful API
 currently support API:
 
 ======   ===========================================================================
-Method   URL(between braces is url parameter, should replaced by real value)
+Method   URL(parameter surrounded by curly braces should replaced by real value)
 ======   ===========================================================================
 GET      /
 GET      /api/v1/device_protocols
