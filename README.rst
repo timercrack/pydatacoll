@@ -1,8 +1,3 @@
-.. pydatacoll documentation master file, created by
-   sphinx-quickstart on Tue Dec  8 16:19:04 2015.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 PyDataColl
 ==========
 
@@ -77,27 +72,3 @@ Quick links
 
 * `Source (github) <https://github.com/timercrack/pydatacoll>`_
 * `Docs <http://pydatacoll.readthedocs.org/>`_
-
-
-Documentation
--------------
-
-This documentation is also available in `PDF formats
-<https://readthedocs.org/projects/pydatacoll/downloads/>`_.
-
-.. toctree::
-   :maxdepth: 2
-   :titlesonly:
-
-   guide
-   develop
-   restapi
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-

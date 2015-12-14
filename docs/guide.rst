@@ -1,4 +1,7 @@
-Users's guide
--------------
+User's guide
+============
 
-not done yet:(
+.. toctree::
+
+    guide/intro
+    guide/models

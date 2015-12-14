@@ -55,7 +55,7 @@ class APIServer(ParamFunctionContainer):
 
     @param_function(method='GET', url=r'/')
     async def get_index(self, request):
-        doc_list = ['pydatacoll server is running, API is:\n']
+        doc_list = ['PyDataColl is running, available API:\n']
         method_dict = defaultdict(list)
         for route in self.web_app.router.routes():
             method_dict[route.method].append('method: {:<8} URL: {}://{}{}'.format(
