@@ -3,4 +3,5 @@ User's guide
 
 .. toctree::
 
-   guide/intro
+    guide/intro
+    guide/models
