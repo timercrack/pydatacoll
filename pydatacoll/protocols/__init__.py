@@ -100,19 +100,22 @@ class BaseDevice(object, metaclass=ABCMeta):
                         continue
                     if 'coefficient' in term_item and 'base_val' in term_item:
                         data_value = data_value * float(term_item['coefficient']) + float(term_item['base_val'])
-                    json_data = json.dumps((data_time.isoformat(sep=' '), data_value))
+                    json_data = json.dumps({
+                        'device_id': self.device_id, 'term_id': term_item['term_id'], 'item_id': term_item['item_id'],
+                        'time': data_time.isoformat(sep=' '), 'value': data_value,
+                    })
                     pub_channel = 'CHANNEL:DEVICE_{}:{}:{}:{}'.format(
                         method.upper(), self.device_id, term_item['term_id'], term_item['item_id'])
-                    rst = await redis_client.publish(pub_channel, json_data)
-                    logger.debug('pub to %s, val=%s, rst=%s', pub_channel, json_data, rst)
                     if method == 'data':
                         data_key = "LST:DATA:{}:{}:{}".format(self.device_id, term_item['term_id'], term_item['item_id'])
-                        await redis_client.rpush(data_key, json_data)
+                        await redis_client.rpush(data_key, json.dumps((data_time.isoformat(sep=' '), data_value)))
                         # if check_result != 'OK':
                         #     warn_msg = json.dumps(
                         #         {'warn_msg': check_result, 'device_id': self.device_id, 'term_id': term_item['term_id'],
                         #          'item_id': term_item['item_id'], 'time': data_time, 'value': data_value})
                         #     await redis_client.publish('CHANNEL:WARNING', warn_msg)
+                    rst = await redis_client.publish(pub_channel, json_data)
+                    logger.debug('pub to %s, val=%s, rst=%s', pub_channel, json_data, rst)
         except Exception as e:
             logger.exception(e)
 

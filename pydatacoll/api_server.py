@@ -1,3 +1,4 @@
+import pkgutil
 from collections import defaultdict
 try:
     import ujson as json
@@ -14,6 +15,7 @@ import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.json_response import JSON
 from pydatacoll.resources.protocol import *
 from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
+from pydatacoll import plugins
 
 logger = my_logger.getLogger('APIServer')
 HANDLER_TIME_OUT = 15
@@ -644,6 +646,13 @@ def run_server(port=8080):
     server = loop.run_until_complete(loop.create_server(handler, '127.0.0.1', port))
     logger.info('serving on %s', server.sockets[0].getsockname())
     try:
+        # load all plugins
+        for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
+            loader.find_module(module_name).load_module(module_name)
+        for plugin_class in plugins.BaseModule.__subclasses__():
+            if not hasattr(plugin_class, 'not_implemented'):
+                plugin = plugin_class()
+                loop.create_task(plugin.install())
         loop.run_forever()
     except KeyboardInterrupt:
         pass

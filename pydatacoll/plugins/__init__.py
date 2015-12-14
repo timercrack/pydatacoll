@@ -20,7 +20,7 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
         self.sub_channels = list()
         self.channel_router = dict()
         self._register_channel()
-        logger.info('plugin %s initialized', type(self).__name__)
+        # logger.info('plugin %s initialized', type(self).__name__)
 
     def _register_channel(self):
         for fun_name, args in self.module_arg_dict.items():
@@ -38,23 +38,24 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
             self.initialized = True
             logger.info('plugin %s installed', type(self).__name__)
         except Exception as e:
-            logger.error('plugin % install failed: %s', type(self).__name__, repr(e), exc_info=True)
+            logger.error('plugin %s install failed: %s', type(self).__name__, repr(e), exc_info=True)
 
     async def uninstall(self):
         try:
-            await self.sub_client.punsubscribe(*self.sub_channels)
+            await self.sub_client.punsubscribe(*[a['channel'] for a in self.module_arg_dict.values()])
             self.redis_pool.release(self.sub_client)
             await self.stop()
             self.initialized = False
+            logger.info('plugin %s uninstalled', type(self).__name__)
         except Exception as e:
-            logger.error('plugin % uninstall failed: %s', type(self).__name__, repr(e), exc_info=True)
+            logger.error('plugin %s uninstall failed: %s', type(self).__name__, repr(e), exc_info=True)
 
     async def _msg_reader(self, ch):
         while await ch.wait_message():
-            _, msg = await ch.get_json()
+            real_channel, msg = await ch.get_json()
             channel = ch.name.decode()
             logger.debug("%s channel[%s] Got Message:%s", type(self).__name__, channel, msg)
-            self.io_loop.create_task(self.channel_router[channel](msg))
+            self.io_loop.create_task(self.channel_router[channel](real_channel, msg))
         logger.debug('%s quit msg_reader!', type(self).__name__)
 
     @abstractmethod

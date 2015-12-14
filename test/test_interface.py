@@ -331,11 +331,11 @@ class InterfaceTest(asynctest.TestCase):
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/device_call', data=json.dumps(call_dict)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertEqual(rst[1], 123)
+            self.assertEqual(rst['value'], 123)
 
     async def test_device_ctrl(self):
         ctrl_dict = {'device_id': '2', 'term_id': '30', 'item_id': '1000', 'value': 123.4}
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/device_ctrl', data=json.dumps(ctrl_dict)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertAlmostEqual(rst[1], 123.4, delta=0.0001)
+            self.assertAlmostEqual(rst['value'], 123.4, delta=0.0001)
