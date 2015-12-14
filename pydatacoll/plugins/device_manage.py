@@ -18,7 +18,7 @@ class DeviceManager(BaseModule):
                 for device_id in device_list:
                     device_dict = await redis_client.hgetall('HS:DEVICE:{}'.format(device_id))
                     if device_dict:
-                        await self.add_device(device_dict)
+                        await self.add_device(None, device_dict)
         except Exception as ee:
             logger.error('init_devices failed: %s', repr(ee), exc_info=True)
 
@@ -26,7 +26,7 @@ class DeviceManager(BaseModule):
         await self.del_device()
 
     @param_function(channel='CHANNEL:DEVICE_DEL')
-    async def del_device(self, device_id=None):
+    async def del_device(self, _, device_id=None):
         try:
             if device_id is None:
                 for device in self.device_list.values():
@@ -41,11 +41,11 @@ class DeviceManager(BaseModule):
             logger.error('del_device failed: %s', repr(ee), exc_info=True)
 
     @param_function(channel='CHANNEL:DEVICE_ADD')
-    async def add_device(self, device_dict):
-        await self.fresh_device(device_dict)
+    async def add_device(self, _, device_dict):
+        await self.fresh_device(_, device_dict)
 
     @param_function(channel='CHANNEL:DEVICE_FRESH')
-    async def fresh_device(self, device_dict):
+    async def fresh_device(self, _, device_dict):
         try:
             device_id = str(device_dict['id'])
             device = self.device_list.get(device_id)
@@ -69,32 +69,32 @@ class DeviceManager(BaseModule):
             logger.error('fresh_device failed: %s', repr(ee), exc_info=True)
 
     @param_function(channel='CHANNEL:TERM_ADD')
-    async def add_term(self, term_dict):
+    async def add_term(self, _, term_dict):
         device = self.device_list.get(term_dict['device_id'])
         logger.debug('add_term device_id=%s, term_id=%s', term_dict['device_id'], term_dict['id'])
         if device is not None:
             device.fresh_task(term_id=term_dict['id'])
 
     @param_function(channel='CHANNEL:TERM_DEL')
-    async def del_term(self, term_dict):
+    async def del_term(self, _, term_dict):
         device = self.device_list.get(term_dict['device_id'])
         if device is not None:
             device.fresh_task(term_id=term_dict['term_id'], item_id=None, delete=True)
 
     @param_function(channel='CHANNEL:TERM_ITEM_ADD')
-    async def add_term_item(self, term_item_dict):
+    async def add_term_item(self, _, term_item_dict):
         device = self.device_list.get(term_item_dict['device_id'])
         if device is not None:
             device.fresh_task(term_id=term_item_dict['term_id'], item_id=term_item_dict['item_id'])
 
     @param_function(channel='CHANNEL:TERM_ITEM_DEL')
-    async def del_term_item(self, term_item_dict):
+    async def del_term_item(self, _, term_item_dict):
         device = self.device_list.get(term_item_dict['device_id'])
         if device is not None:
             device.fresh_task(term_id=term_item_dict['term_id'], item_id=term_item_dict['item_id'], delete=True)
 
     @param_function(channel='CHANNEL:DEVICE_CALL')
-    async def device_call(self, call_dict):
+    async def device_call(self, _, call_dict):
         try:
             device_id = call_dict['device_id']
             term_id = call_dict['term_id']
@@ -105,7 +105,7 @@ class DeviceManager(BaseModule):
             logger.error('device_call failed: %s', repr(ee), exc_info=True)
 
     @param_function(channel='CHANNEL:DEVICE_CTRL')
-    async def device_ctrl(self, ctrl_dict):
+    async def device_ctrl(self, _, ctrl_dict):
         try:
             device_id = ctrl_dict['device_id']
             term_id = ctrl_dict['term_id']

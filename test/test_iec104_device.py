@@ -138,7 +138,7 @@ class IEC104DeviceTest(asynctest.TestCase):
             await sub_client.unsubscribe('CHANNEL:DEVICE_CTRL:1:10:20')
             await tsk
 
-        self.assertAlmostEqual(rst[1], 123.4, delta=0.0001)
+        self.assertAlmostEqual(rst['value'], 123.4, delta=0.0001)
         device.disconnect()
 
     async def test_call_data(self):
@@ -164,5 +164,5 @@ class IEC104DeviceTest(asynctest.TestCase):
             await sub_client.unsubscribe('CHANNEL:DEVICE_CALL:1:10:20')
             await tsk
 
-        self.assertEqual(rst[1], 123)
+        self.assertEqual(rst['value'], 123)
         device.disconnect()

@@ -5,8 +5,10 @@ logger = my_logger.getLogger('FormulaCalc')
 
 
 class FormulaCalc(BaseModule):
-    def stop(self):
+    not_implemented = True
+
+    async def stop(self):
         pass
 
-    def start(self):
+    async def start(self):
         pass
