@@ -7,7 +7,7 @@ import pydatacoll.utils.logger as my_logger
 from pydatacoll.protocols.iec104.frame import *
 from . import mock_data
 
-logger = my_logger.getLogger('MockIEC104')
+logger = my_logger.get_logger('MockIEC104')
 
 
 # 模拟104从站，device_id=监听的TCP端口-2403
@@ -32,22 +32,22 @@ class IEC104Device(asyncio.Protocol):
         self.task_handler = None
         self.transport = None
         self.device_id = None
-        logger.debug('mock device server start!')
+        logger.info('mock device server start!')
 
     def connection_made(self, transport):
         self.device_id = transport.get_extra_info('sockname')[1] - 2403
         self.io_loop = asyncio.get_event_loop()
         self.redis = redis.StrictRedis(db=1, decode_responses=True)
         self.device_info = self.redis.hgetall('HS:DEVICE:{}'.format(self.device_id))
-        logger.debug('connect from %s, device_info=%s, id=%s',
+        logger.info('connect from %s, device_info=%s, id=%s',
                      transport.get_extra_info('peername'), self.device_info, self.device_id)
         self.transport = transport
 
     def connection_lost(self, exc):
         if exc is None:
-            logger.debug('device[%s] closed.', self.device_id)
+            logger.info('device[%s] closed.', self.device_id)
         else:
-            logger.error('device[%s] connection_lost.', self.device_id)
+            logger.info('device[%s] connection_lost.', self.device_id)
         self.stop_timer(IECParam.T0)
         self.stop_timer(IECParam.T1)
         self.stop_timer(IECParam.T2)
@@ -294,7 +294,8 @@ class IEC104Device(asyncio.Protocol):
             frame.ASDU.data[0].Value = addr
             self.send_frame(frame)
 
-if __name__ == '__main__':
+
+def run_server():
     mock_data.generate()
     loop = asyncio.get_event_loop()
     server_list = []
@@ -307,3 +308,6 @@ if __name__ == '__main__':
         pass
     finally:
         loop.close()
+
+if __name__ == '__main__':
+    run_server()

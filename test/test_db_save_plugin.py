@@ -1,28 +1,24 @@
 import asyncio
-import functools
 import datetime
-import aioredis
-import asynctest
-import pymysql
-import redis
-
 try:
     import ujson as json
 except ImportError:
     import json
-
+import functools
+import aioredis
+import asynctest
+import pymysql
+import redis
 import pydatacoll.utils.logger as my_logger
 import pydatacoll.plugins.db_save as db_save
 
-logger = my_logger.getLogger('DBSaverTest')
+logger = my_logger.get_logger('DBSaverTest')
 
 
 class DBSaverTest(asynctest.TestCase):
     def setUp(self):
         super(DBSaverTest, self).setUp()
-        self.conn = pymysql.Connect(host='127.0.0.1', port=3306,
-                                    user='pydatacoll', password='pydatacoll',
-                                    db='test')
+        self.conn = pymysql.Connect(host='127.0.0.1', port=3306, user='pydatacoll', password='pydatacoll', db='test')
         self.cursor = self.conn.cursor()
         self.cursor.execute("DROP TABLE IF EXISTS test_db_save")
         self.cursor.execute("CREATE TABLE test_db_save(device_id INTEGER, term_id INTEGER, item_id INTEGER,"
@@ -37,9 +33,8 @@ class DBSaverTest(asynctest.TestCase):
         self.loop.run_until_complete(self.db_saver.install())
 
     def tearDown(self):
-        self.loop.run_until_complete(self.db_saver.uninstall())
-        self.loop.run_until_complete(self.redis_pool.clear())
         self.conn.close()
+        self.loop.run_until_complete(self.db_saver.uninstall())
 
     async def test_save(self):
         self.redis_client.hmset('HS:TERM_ITEM:10:20', {

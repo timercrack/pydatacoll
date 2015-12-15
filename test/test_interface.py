@@ -4,7 +4,7 @@ import aioredis
 import asynctest
 import redis
 import multiprocessing
-
+import time
 try:
     import ujson as json
 except ImportError:
@@ -12,12 +12,12 @@ except ImportError:
 
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.resources.protocol import *
-from test.mock_device import mock_data
+from test.mock_device import mock_data, iec104device
+from pydatacoll import api_server
 
-logger = my_logger.getLogger('TestInterface')
+logger = my_logger.get_logger('TestInterface')
 
 
-@asynctest.skip
 class RedisTest(asynctest.TestCase):
     async def test_connect_timeout(self):
         try:
@@ -57,18 +57,22 @@ class RedisTest(asynctest.TestCase):
 
 
 class InterfaceTest(asynctest.TestCase):
-    """
-    测试之前先开启三个独立的shell，分别运行如下命令（按照先后顺序）：
-    python -m pydatacoll.api_server
-    python -m test.mock_device.iec104device
-    python -m pydatacoll.plugins.device_manage
-    """
-    use_default_loop = True
-    
+    # use_default_loop = True
     @classmethod
     def setUpClass(cls):
-        mock_data.generate()
         cls.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+        cls.mock_device = multiprocessing.Process(target=iec104device.run_server)
+        cls.api_server = multiprocessing.Process(target=api_server.run_server)
+        cls.mock_device.start()
+        time.sleep(1)
+        cls.api_server.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.api_server.terminate()
+        cls.api_server.join()
+        cls.mock_device.terminate()
+        cls.mock_device.join()
 
     async def test_get_protocol_list(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/device_protocols') as r:

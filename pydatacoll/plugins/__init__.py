@@ -6,15 +6,20 @@ import aioredis
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.func_container import ParamFunctionContainer
 
-logger = my_logger.getLogger('BaseModule')
+logger = my_logger.get_logger('BaseModule')
 
 
 class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
-    def __init__(self, io_loop: asyncio.AbstractEventLoop=None, redis_pool: aioredis.RedisPool=None):
+    def __init__(self, io_loop: asyncio.AbstractEventLoop = None,
+                 redis_pool: aioredis.RedisPool = None):
         super().__init__()
         self.io_loop = io_loop or asyncio.get_event_loop()
-        self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-            functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
+        self.redis_pool = redis_pool
+        self._redis_pool = self.redis_pool
+        if self.redis_pool is None:
+            self.redis_pool = self._redis_pool = self.io_loop.run_until_complete(
+                    functools.partial(
+                            aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.initialized = False
         self.sub_client = None
         self.sub_channels = list()
@@ -42,9 +47,10 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
 
     async def uninstall(self):
         try:
+            await self.stop()
             await self.sub_client.punsubscribe(*[a['channel'] for a in self.module_arg_dict.values()])
             self.redis_pool.release(self.sub_client)
-            await self.stop()
+            await self._redis_pool.clear()
             self.initialized = False
             logger.info('plugin %s uninstalled', type(self).__name__)
         except Exception as e:

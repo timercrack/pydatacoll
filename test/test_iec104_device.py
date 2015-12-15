@@ -10,7 +10,7 @@ from pydatacoll.protocols.iec104.frame import *
 from test.mock_device.iec104device import IEC104Device as MockDevice
 from test.mock_device import mock_data
 
-logger = my_logger.getLogger('IEC104DeviceTest')
+logger = my_logger.get_logger('IEC104DeviceTest')
 
 
 class IEC104DeviceTest(asynctest.TestCase):

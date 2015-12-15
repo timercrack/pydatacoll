@@ -4,7 +4,7 @@ from pydatacoll.plugins import BaseModule
 from pydatacoll.utils.func_container import param_function
 import pydatacoll.utils.logger as my_logger
 
-logger = my_logger.getLogger('DeviceManager')
+logger = my_logger.get_logger('DeviceManager')
 
 
 class DeviceManager(BaseModule):
@@ -116,8 +116,10 @@ class DeviceManager(BaseModule):
         except Exception as ee:
             logger.error('device_ctrl failed: %s', repr(ee), exc_info=True)
 
+
 if __name__ == '__main__':
     import asyncio
+
     loop = asyncio.get_event_loop()
     device_manager = DeviceManager(loop)
     try:
