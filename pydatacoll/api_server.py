@@ -22,24 +22,24 @@ HANDLER_TIME_OUT = 15
 
 
 class APIServer(ParamFunctionContainer):
-    def __init__(self, web_app: web.Application, io_loop: asyncio.AbstractEventLoop = None,
+    def __init__(self, port, io_loop: asyncio.AbstractEventLoop = None,
                  redis_pool: aioredis.RedisPool = None):
         super().__init__()
-        self.web_app = web_app
+        self.port = port
         self.io_loop = io_loop or asyncio.get_event_loop()
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
                 functools.partial(aioredis.create_pool, ('localhost', 6379),
                                   db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+        self.web_app = web.Application()
         self._add_router()
+        self.web_handler = self.web_app.make_handler()
+        self.server = self.io_loop.run_until_complete(self.io_loop.create_server(self.web_handler, '127.0.0.1', port))
         self._load_plugins()
 
     def _add_router(self):
         for fun_name, args in self.module_arg_dict.items():
             self.web_app.router.add_route(args['method'], args['url'], getattr(self, fun_name), name=fun_name)
-
-    def make_handler(self, **kwargs):
-        return self.web_app.make_handler(**kwargs)
 
     def _load_plugins(self):
         try:
@@ -655,22 +655,21 @@ class APIServer(ParamFunctionContainer):
 
 
 def run_server(port=8080):
-    loop = asyncio.get_event_loop()
-    web_app = web.Application()
-    api_server = APIServer(web_app)
-    handler = api_server.make_handler()
-    server = loop.run_until_complete(loop.create_server(handler, '127.0.0.1', port))
-    logger.info('serving on %s', server.sockets[0].getsockname())
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        loop.run_until_complete(handler.finish_connections(1.0))
-        server.close()
-        loop.run_until_complete(server.wait_closed())
-        loop.run_until_complete(web_app.finish())
-    loop.close()
+    # loop = asyncio.get_event_loop()
+    # web_app = web.Application()
+    api_server = APIServer(port)
+    logger.info('serving on %s', api_server.server.sockets[0].getsockname())
+    asyncio.get_event_loop().run_forever()
+    # try:
+    #     loop.run_forever()
+    # except KeyboardInterrupt:
+    #     pass
+    # finally:
+    #     loop.run_until_complete(handler.finish_connections(1.0))
+    #     server.close()
+    #     loop.run_until_complete(server.wait_closed())
+    #     loop.run_until_complete(web_app.finish())
+    # loop.close()
 
 
 if __name__ == '__main__':
