@@ -13,17 +13,19 @@ from abc import ABCMeta, abstractmethod
 
 from pydatacoll.utils import logger as my_logger
 
-logger = my_logger.getLogger('BaseDevice')
+logger = my_logger.get_logger('BaseDevice')
 
 
 class BaseDevice(object, metaclass=ABCMeta):
-    def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop, redis_pool: aioredis.RedisPool):
+    def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop,
+                 redis_pool: aioredis.RedisPool):
         self.connected = False
         self.device_info = device_info
         self.device_id = self.device_info['id']
         self.io_loop = io_loop or asyncio.get_event_loop()
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-            functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
+                functools.partial(
+                        aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
 
     async def save_frame(self, frame, send=True):
@@ -31,9 +33,8 @@ class BaseDevice(object, metaclass=ABCMeta):
             with (await self.redis_pool) as redis_client:
                 await redis_client.rpush("LST:FRAME:{}".format(self.device_id),
                                          '{time},{type},{frame}'.format(
-                                             time=datetime.datetime.now().isoformat(sep=' '),
-                                             type="send" if send is True else "recv",
-                                             frame=frame.hex()))
+                                                 time=datetime.datetime.now().isoformat(sep=' '),
+                                                 type="send" if send is True else "recv", frame=frame.hex()))
         except Exception as e:
             logger.error("device[%s] save_frame failed: %s", self.device_id, repr(e))
 
@@ -43,8 +44,8 @@ class BaseDevice(object, metaclass=ABCMeta):
             if not self.connected:
                 raise Exception('device not connected!')
             with (await self.redis_pool) as redis_client:
-                term_item = await redis_client.hgetall(
-                    'HS:TERM_ITEM:{term_id}:{item_id}'.format(term_id=term_id, item_id=item_id))
+                term_item = await redis_client.hgetall('HS:TERM_ITEM:{term_id}:{item_id}'.format(
+                        term_id=term_id, item_id=item_id))
                 logger.debug('device[%s] call_data, term_item=%s', self.device_id, term_item)
                 if not term_item:
                     logger.error('device[%s] HS:TERM_ITEM:{%s}:{%s} not found!', self.device_id, term_id, item_id)
@@ -60,8 +61,8 @@ class BaseDevice(object, metaclass=ABCMeta):
             if not self.connected:
                 raise Exception('device not connected!')
             with (await self.redis_pool) as redis_client:
-                term_item = await redis_client.hgetall(
-                    'HS:TERM_ITEM:{term_id}:{item_id}'.format(term_id=term_id, item_id=item_id))
+                term_item = await redis_client.hgetall('HS:TERM_ITEM:{term_id}:{item_id}'.format(
+                                term_id=term_id, item_id=item_id))
                 logger.debug('device[%s] ctrl_data, term_item=%s, value=%s', self.device_id, term_item, value)
                 if not term_item:
                     logger.error('device[%s] HS:TERM_ITEM:{%s}:{%s} not found!', self.device_id, term_id, item_id)
@@ -92,8 +93,8 @@ class BaseDevice(object, metaclass=ABCMeta):
         try:
             with (await self.redis_pool) as redis_client:
                 for data_time, protocol_code, data_value in data_pairs:
-                    map_key = 'HS:MAPPING:{}:{}:{}'.format(
-                        self.device_info['protocol'].upper(), self.device_id, protocol_code)
+                    map_key = 'HS:MAPPING:{}:{}:{}'.format(self.device_info['protocol'].upper(),
+                                                           self.device_id, protocol_code)
                     term_item = await redis_client.hgetall(map_key)
                     if not term_item:
                         logger.debug("DEVICE[%s] precess_data: can't found term_item, key=%s", self.device_id, map_key)
@@ -105,9 +106,10 @@ class BaseDevice(object, metaclass=ABCMeta):
                         'time': data_time.isoformat(sep=' '), 'value': data_value,
                     })
                     pub_channel = 'CHANNEL:DEVICE_{}:{}:{}:{}'.format(
-                        method.upper(), self.device_id, term_item['term_id'], term_item['item_id'])
+                            method.upper(), self.device_id, term_item['term_id'], term_item['item_id'])
                     if method == 'data':
-                        data_key = "LST:DATA:{}:{}:{}".format(self.device_id, term_item['term_id'], term_item['item_id'])
+                        data_key = "LST:DATA:{}:{}:{}".format(
+                                self.device_id, term_item['term_id'], term_item['item_id'])
                         await redis_client.rpush(data_key, json.dumps((data_time.isoformat(sep=' '), data_value)))
                         # if check_result != 'OK':
                         #     warn_msg = json.dumps(
@@ -158,5 +160,4 @@ class BaseDevice(object, metaclass=ABCMeta):
 
     @abstractmethod
     def disconnect(self, reconnect=False):
-        # a = redis.StrictRedis(host='pub-redis-10152.dal-05.1.sl.garantiadata.com', port=10152, password='jeffchen')
         pass

@@ -17,21 +17,22 @@ from pydatacoll.resources.protocol import *
 from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
 from pydatacoll import plugins
 
-logger = my_logger.getLogger('APIServer')
+logger = my_logger.get_logger('APIServer')
 HANDLER_TIME_OUT = 15
 
 
 class APIServer(ParamFunctionContainer):
-    def __init__(self, web_app: web.Application, io_loop: asyncio.AbstractEventLoop=None,
-                 redis_pool: aioredis.RedisPool=None):
+    def __init__(self, web_app: web.Application, io_loop: asyncio.AbstractEventLoop = None,
+                 redis_pool: aioredis.RedisPool = None):
         super().__init__()
         self.web_app = web_app
         self.io_loop = io_loop or asyncio.get_event_loop()
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-            functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10,
-                              encoding='utf-8')())
+                functools.partial(aioredis.create_pool, ('localhost', 6379),
+                                  db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         self._add_router()
+        self._load_plugins()
 
     def _add_router(self):
         for fun_name, args in self.module_arg_dict.items():
@@ -39,6 +40,17 @@ class APIServer(ParamFunctionContainer):
 
     def make_handler(self, **kwargs):
         return self.web_app.make_handler(**kwargs)
+
+    def _load_plugins(self):
+        try:
+            for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
+                loader.find_module(module_name).load_module(module_name)
+            for plugin_class in plugins.BaseModule.__subclasses__():
+                if not hasattr(plugin_class, 'not_implemented'):
+                    plugin = plugin_class()
+                    self.io_loop.create_task(plugin.install())
+        except Exception as e:
+            logger.error("_load_plugins failed: %s", repr(e), exc_info=True)
 
     @staticmethod
     async def _find_keys(redis_client, match: str):
@@ -59,9 +71,8 @@ class APIServer(ParamFunctionContainer):
         method_dict = defaultdict(list)
         for route in self.web_app.router.routes():
             method_dict[route.method].append('method: {:<8} URL: {}://{}{}'.format(
-                route.method, request.scheme, request.host,
-                route._formatter if hasattr(route, '_formatter') else route._path),
-            )
+                    route.method, request.scheme, request.host, route._formatter if hasattr(route, '_formatter') else
+                    route._path))
         doc_list.append('\n'.join(sorted(method_dict['GET'])))
         doc_list.append('\n'.join(sorted(method_dict['POST'])))
         doc_list.append('\n'.join(sorted(method_dict['PUT'])))
@@ -191,7 +202,7 @@ class APIServer(ParamFunctionContainer):
         except Exception as e:
             logger.error('get_term_item failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
-        
+
     @param_function(method='GET', url=r'/api/v1/devices/{device_id}/terms/{term_id}/items/{item_id}/datas')
     async def get_data_list(self, request):
         try:
@@ -283,11 +294,11 @@ class APIServer(ParamFunctionContainer):
                 # delete values
                 keys = await self._find_keys(redis_client, 'LST:DATA:{}:*'.format(device_id))
                 if keys:
-                        self.redis_client.delete(*keys)
+                    self.redis_client.delete(*keys)
                 # delete mapping
                 keys = await self._find_keys(redis_client, 'HS:MAPPING:*:{}:*'.format(device_id))
                 if keys:
-                        self.redis_client.delete(*keys)
+                    self.redis_client.delete(*keys)
                 return web.Response()
         except Exception as e:
             logger.error('del_device failed: %s', repr(e), exc_info=True)
@@ -334,7 +345,7 @@ class APIServer(ParamFunctionContainer):
         except Exception as e:
             logger.error('update_term failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
-        
+
     @param_function(method='DELETE', url=r'/api/v1/terms/{term_id}')
     async def del_term(self, request):
         try:
@@ -352,7 +363,7 @@ class APIServer(ParamFunctionContainer):
                 # delete all values
                 keys = await self._find_keys(redis_client, 'LST:DATA:*:{}:*'.format(term_id))
                 if keys:
-                        self.redis_client.delete(*keys)
+                    self.redis_client.delete(*keys)
                 # delete from protocols mapping
                 all_keys = set()
                 keys = await self._find_keys(redis_client, 'HS:MAPPING:*')
@@ -361,7 +372,7 @@ class APIServer(ParamFunctionContainer):
                     if str(map_key['term_id']) == term_id:
                         all_keys.add(key)
                 if all_keys:
-                        self.redis_client.delete(*all_keys)
+                    self.redis_client.delete(*all_keys)
                 return web.Response()
         except Exception as e:
             logger.error('del_term failed: %s', repr(e), exc_info=True)
@@ -403,7 +414,7 @@ class APIServer(ParamFunctionContainer):
         except Exception as e:
             logger.error('update_item failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
-        
+
     @param_function(method='DELETE', url=r'/api/v1/items/{item_id}')
     async def del_item(self, request):
         try:
@@ -421,7 +432,7 @@ class APIServer(ParamFunctionContainer):
                 # delete from term->item hash
                 keys = await self._find_keys(redis_client, 'HS:TERM_ITEM:*:{}'.format(item_id))
                 if keys:
-                        self.redis_client.delete(*keys)
+                    self.redis_client.delete(*keys)
                 # delete from protocols mapping
                 all_keys = set()
                 keys = await self._find_keys(redis_client, 'HS:MAPPING:*')
@@ -430,11 +441,11 @@ class APIServer(ParamFunctionContainer):
                     if map_key and str(map_key['item_id']) == item_id:
                         all_keys.add(key)
                 if all_keys:
-                        await redis_client.delete(*all_keys)
+                    await redis_client.delete(*all_keys)
                 # delete all values
                 keys = await self._find_keys(redis_client, 'LST:DATA:*:*:{}'.format(item_id))
                 if keys:
-                        self.redis_client.delete(*keys)
+                    self.redis_client.delete(*keys)
                 return web.Response()
         except Exception as e:
             logger.error('del_item failed: %s', repr(e), exc_info=True)
@@ -474,9 +485,9 @@ class APIServer(ParamFunctionContainer):
                     if str(map_key['term_id']) == term_id and str(map_key['item_id']) == item_id:
                         all_keys.add(key)
                 if all_keys:
-                        self.redis_client.delete(*all_keys)
-                self.redis_client.hmset('HS:MAPPING:{}:{}:{}'.format(
-                    device_info['protocol'].upper(), device_id, term_item_dict['protocol_code']), term_item_dict)
+                    self.redis_client.delete(*all_keys)
+                self.redis_client.hmset('HS:MAPPING:{}:{}:{}'.format(device_info['protocol'].upper(), device_id,
+                                                                     term_item_dict['protocol_code']), term_item_dict)
                 await redis_client.publish('CHANNEL:TERM_ITEM_ADD', json.dumps(term_item_dict))
                 return web.Response()
         except Exception as e:
@@ -519,11 +530,11 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.delete('HS:TERM_ITEM:{}:{}'.format(term_id, item_id))
                 await redis_client.srem('SET:TERM_ITEM:{}'.format(term_id), item_id)
                 await redis_client.delete('HS:MAPPING:{}:{}:{}'.format(
-                    device_info['protocol'].upper(), device_id, term_item_dict['protocol_code']))
+                        device_info['protocol'].upper(), device_id, term_item_dict['protocol_code']))
                 # delete all values
                 keys = await self._find_keys(redis_client, 'LST:DATA:*:{}:{}'.format(term_id, item_id))
                 if keys:
-                        self.redis_client.delete(*keys)
+                    self.redis_client.delete(*keys)
                 return web.Response()
         except Exception as e:
             logger.error('del_term_item failed: %s', repr(e), exc_info=True)
@@ -547,20 +558,22 @@ class APIServer(ParamFunctionContainer):
             found = await redis_client.exists('HS:ITEM:{}'.format(call_data_dict['item_id']))
             if not found:
                 return web.Response(status=404, text='item_id not found!')
-            found = await redis_client.exists('HS:TERM_ITEM:{}:{}'.format(call_data_dict['term_id'],
-                                                                          call_data_dict['item_id']))
+            found = await redis_client.exists('HS:TERM_ITEM:{}:{}'.format(
+                    call_data_dict['term_id'], call_data_dict['item_id']))
             if not found:
                 return web.Response(status=404, text='term_item not found!')
             await redis_client.publish('CHANNEL:DEVICE_CALL', call_data)
             channel_name = 'CHANNEL:DEVICE_CALL:{}:{}:{}'.format(
-                call_data_dict['device_id'], call_data_dict['term_id'], call_data_dict['item_id'])
+                    call_data_dict['device_id'], call_data_dict['term_id'], call_data_dict['item_id'])
             res = await redis_client.subscribe(channel_name)
             cb = asyncio.futures.Future()
+
             async def reader(ch):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('device_call got msg: %s', msg)
                     cb.set_result(msg)
+
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
             await redis_client.unsubscribe(channel_name)
@@ -592,20 +605,22 @@ class APIServer(ParamFunctionContainer):
             found = await redis_client.exists('HS:ITEM:{}'.format(ctrl_data_dict['item_id']))
             if not found:
                 return web.Response(status=404, text='item_id not found!')
-            found = await redis_client.exists('HS:TERM_ITEM:{}:{}'.format(ctrl_data_dict['term_id'],
-                                                                          ctrl_data_dict['item_id']))
+            found = await redis_client.exists(
+                    'HS:TERM_ITEM:{}:{}'.format(ctrl_data_dict['term_id'], ctrl_data_dict['item_id']))
             if not found:
                 return web.Response(status=404, text='term_item not found!')
             await redis_client.publish('CHANNEL:DEVICE_CTRL', ctrl_data)
             channel_name = 'CHANNEL:DEVICE_CTRL:{}:{}:{}'.format(
-                ctrl_data_dict['device_id'], ctrl_data_dict['term_id'], ctrl_data_dict['item_id'])
+                    ctrl_data_dict['device_id'], ctrl_data_dict['term_id'], ctrl_data_dict['item_id'])
             res = await redis_client.subscribe(channel_name)
             cb = asyncio.futures.Future()
+
             async def reader(ch):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('device_ctrl got msg: %s', msg)
                     cb.set_result(msg)
+
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
             await redis_client.unsubscribe(channel_name)
@@ -618,6 +633,7 @@ class APIServer(ParamFunctionContainer):
             if redis_client and redis_client.in_pubsub and channel_name:
                 await redis_client.unsubscribe(channel_name)
             return web.Response(status=400, text=repr(e))
+
 
 # class Container(api_hour.Container):
 #     """
@@ -646,13 +662,6 @@ def run_server(port=8080):
     server = loop.run_until_complete(loop.create_server(handler, '127.0.0.1', port))
     logger.info('serving on %s', server.sockets[0].getsockname())
     try:
-        # load all plugins
-        for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
-            loader.find_module(module_name).load_module(module_name)
-        for plugin_class in plugins.BaseModule.__subclasses__():
-            if not hasattr(plugin_class, 'not_implemented'):
-                plugin = plugin_class()
-                loop.create_task(plugin.install())
         loop.run_forever()
     except KeyboardInterrupt:
         pass
@@ -662,6 +671,7 @@ def run_server(port=8080):
         loop.run_until_complete(server.wait_closed())
         loop.run_until_complete(web_app.finish())
     loop.close()
+
 
 if __name__ == '__main__':
     run_server()

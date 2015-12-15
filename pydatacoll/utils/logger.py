@@ -6,7 +6,7 @@ initLock = threading.Lock()
 rootLoggerInitialized = False
 
 log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
-level = logging.DEBUG
+level = logging.ERROR
 file_log = None  # File name
 console_log = True
 # sys_str = platform.system()
@@ -25,14 +25,14 @@ def init_logger(logger):
     logger.setLevel(level)
 
     if file_log is not None:
-        fileHandler = logging.FileHandler(file_log)
-        init_handler(fileHandler)
-        logger.addHandler(fileHandler)
+        file_handler = logging.FileHandler(file_log)
+        init_handler(file_handler)
+        logger.addHandler(file_handler)
 
     if console_log:
-        consoleHandler = logging.StreamHandler()
-        init_handler(consoleHandler)
-        logger.addHandler(consoleHandler)
+        console_handler = logging.StreamHandler()
+        init_handler(console_handler)
+        logger.addHandler(console_handler)
 
 
 def initialize():
@@ -43,7 +43,7 @@ def initialize():
             rootLoggerInitialized = True
 
 
-def getLogger(name=None):
+def get_logger(name=None):
     initialize()
     return logging.getLogger(name)
 
@@ -52,14 +52,14 @@ def getLogger(name=None):
 class Formatter(logging.Formatter):
     DATETIME_HOOK = None
 
-    def formatTime(self, record, datefmt=None):
-        newDateTime = None
+    def formatTime(self, record, date_fmt=None):
+        new_date_time = None
 
         if Formatter.DATETIME_HOOK is not None:
-            newDateTime = Formatter.DATETIME_HOOK()
+            new_date_time = Formatter.DATETIME_HOOK()
 
-        if newDateTime is None:
-            ret = logging.Formatter.formatTime(self, record, datefmt)
+        if new_date_time is None:
+            ret = logging.Formatter.formatTime(self, record, date_fmt)
         else:
-            ret = str(newDateTime)
+            ret = str(new_date_time)
         return ret
