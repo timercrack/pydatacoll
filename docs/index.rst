@@ -47,6 +47,7 @@ the following optional packages may be useful:
     package using pip::
 
         pip install -r requirements.txt
+        pip install --no-index --find-links=local_wheels -r requirements.txt
 
 2.  Then run the following to start PyDataColl server::
 
@@ -55,7 +56,7 @@ the following optional packages may be useful:
 .. note::
     to stop server, press CTRL+C to exit
 
-3.  Congratulations! The server is running now. Visit http://localhost:8080 in browser to see the server information, if
+3.  Visit http://localhost:8080 in browser to see the server information, if
     success, you will find something like this::
 
         PyDataColl is running, available API:
@@ -64,7 +65,8 @@ the following optional packages may be useful:
         method: GET      URL: http://localhost:8080/api/v1/devices
         (...more omitted)
 
-4.  Now you can send request to server with your favorite http client! check :doc:`restapi` to see the API list.
+4.  Congratulations! The server is running now. You can send request to server with your favorite http client!
+    check :doc:`restapi` to see the API list.
 
 **Platforms**: PyDataColl should run on any Unix-like platform, although for the best performance and scalability only
 Linux (with ``epoll``) and BSD (with ``kqueue``) are recommended for production deployment (even though Mac OS X is

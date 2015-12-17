@@ -297,7 +297,8 @@ class IEC104Device(asyncio.Protocol):
 
 def run_server():
     mock_data.generate()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     server_list = []
     for idx in range(5):
         server_list.append(

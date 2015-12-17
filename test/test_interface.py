@@ -66,6 +66,7 @@ class InterfaceTest(asynctest.TestCase):
         cls.mock_device.start()
         time.sleep(1)
         cls.api_server.start()
+        time.sleep(1)
 
     @classmethod
     def tearDownClass(cls):

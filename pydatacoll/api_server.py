@@ -26,7 +26,10 @@ class APIServer(ParamFunctionContainer):
                  redis_pool: aioredis.RedisPool = None):
         super().__init__()
         self.port = port
-        self.io_loop = io_loop or asyncio.get_event_loop()
+        self.io_loop = io_loop
+        if self.io_loop is None:
+            self.io_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.io_loop)
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
                 functools.partial(aioredis.create_pool, ('localhost', 6379),
                                   db=1, minsize=5, maxsize=10, encoding='utf-8')())
@@ -64,6 +67,13 @@ class APIServer(ParamFunctionContainer):
         except Exception as e:
             logger.error('_find_keys failed: %s', repr(e), exc_info=True)
         return all_keys
+
+    @staticmethod
+    async def _read_data(request):
+        data = await request.read()
+        if isinstance(data, bytes):
+            data = data.decode('utf-8')
+        return data
 
     @param_function(method='GET', url=r'/')
     async def get_index(self, request):
@@ -234,7 +244,7 @@ class APIServer(ParamFunctionContainer):
     async def create_device(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                device_data = await request.read()
+                device_data = await self._read_data(request)
                 device_dict = json.loads(device_data)
                 logger.debug('new device arg=%s', device_dict)
                 found = await redis_client.exists('HS:DEVICE:{}'.format(device_dict['id']))
@@ -256,7 +266,7 @@ class APIServer(ParamFunctionContainer):
                 old_device = await redis_client.hgetall('HS:DEVICE:{}'.format(device_id))
                 if not old_device:
                     return web.Response(status=404, text='device_id not found!')
-                device_data = await request.read()
+                device_data = await self._read_data(request)
                 device_dict = json.loads(device_data)
                 if str(device_dict['id']) != device_id:
                     await self.del_device(request)
@@ -308,7 +318,7 @@ class APIServer(ParamFunctionContainer):
     async def create_term(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                term_data = await request.read()
+                term_data = await self._read_data(request)
                 term_dict = json.loads(term_data)
                 logger.debug('new term arg=%s', term_dict)
                 found = await redis_client.exists('HS:TERM:{}'.format(term_dict['id']))
@@ -331,7 +341,7 @@ class APIServer(ParamFunctionContainer):
                 old_term = await redis_client.hgetall('HS:TERM:{}'.format(term_id))
                 if not old_term:
                     return web.Response(status=404, text='term_id not found!')
-                term_data = await request.read()
+                term_data = await self._read_data(request)
                 term_dict = json.loads(term_data)
                 if str(term_dict['id']) != term_id:
                     await self.del_term(request)
@@ -382,7 +392,7 @@ class APIServer(ParamFunctionContainer):
     async def create_item(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                item_data = await request.read()
+                item_data = await self._read_data(request)
                 item_dict = json.loads(item_data)
                 logger.debug('new item arg=%s', item_dict)
                 found = await redis_client.exists('HS:ITEM:{}'.format(item_dict['id']))
@@ -403,7 +413,7 @@ class APIServer(ParamFunctionContainer):
                 old_item = await redis_client.hgetall('HS:ITEM:{}'.format(item_id))
                 if not old_item:
                     return web.Response(status=404, text='item_id not found!')
-                item_data = await request.read()
+                item_data = await self._read_data(request)
                 item_dict = json.loads(item_data)
                 if str(item_dict['id']) != item_id:
                     await self.del_item(request)
@@ -455,7 +465,7 @@ class APIServer(ParamFunctionContainer):
     async def create_term_item(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                term_item_data = await request.read()
+                term_item_data = await self._read_data(request)
                 term_item_dict = json.loads(term_item_data)
                 logger.debug('new term_item arg=%s', term_item_dict)
                 term_id = request.match_info['term_id']
@@ -498,7 +508,7 @@ class APIServer(ParamFunctionContainer):
     async def update_term_item(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                term_item_data = await request.read()
+                term_item_data = await self._read_data(request)
                 term_item_dict = json.loads(term_item_data)
                 term_id = request.match_info['term_id']
                 item_id = request.match_info['item_id']
@@ -546,7 +556,7 @@ class APIServer(ParamFunctionContainer):
         channel_name = None
         try:
             redis_client = await self.redis_pool.acquire()
-            call_data = await request.read()
+            call_data = await self._read_data(request)
             call_data_dict = json.loads(call_data)
             logger.debug('new call_data arg=%s', call_data_dict)
             found = await redis_client.exists('HS:DEVICE:{}'.format(call_data_dict['device_id']))
@@ -593,7 +603,7 @@ class APIServer(ParamFunctionContainer):
         channel_name = None
         try:
             redis_client = await self.redis_pool.acquire()
-            ctrl_data = await request.read()
+            ctrl_data = await self._read_data(request)
             ctrl_data_dict = json.loads(ctrl_data)
             logger.debug('new ctrl_data arg=%s', ctrl_data_dict)
             found = await redis_client.exists('HS:DEVICE:{}'.format(ctrl_data_dict['device_id']))
