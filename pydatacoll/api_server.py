@@ -220,7 +220,7 @@ class APIServer(ParamFunctionContainer):
                 device_id = request.match_info['device_id']
                 term_id = request.match_info['term_id']
                 item_id = request.match_info['item_id']
-                data_list = await redis_client.lrange('LST:DATA:{}:{}:{}'.format(device_id, term_id, item_id), 0, -1)
+                data_list = await redis_client.hgetall('HS:DATA:{}:{}:{}'.format(device_id, term_id, item_id))
                 return JSON(data_list)
         except Exception as e:
             logger.error('get_data_list failed: %s', repr(e), exc_info=True)
@@ -234,8 +234,9 @@ class APIServer(ParamFunctionContainer):
                 term_id = request.match_info['term_id']
                 item_id = request.match_info['item_id']
                 index = int(request.match_info['index'])
-                data_list = await redis_client.lindex('LST:DATA:{}:{}:{}'.format(device_id, term_id, item_id), index)
-                return JSON(data_list)
+                idx_key = await redis_client.lindex('LST:DATA_TIME:{}:{}:{}'.format(device_id, term_id, item_id), index)
+                data_val = await redis_client.hget('HS:DATA:{}:{}:{}'.format(device_id, term_id, item_id), idx_key)
+                return JSON({idx_key: data_val})
         except Exception as e:
             logger.error('get_data failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
@@ -302,7 +303,10 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.delete('SET:DEVICE_TERM:{}'.format(device_id))
                 await redis_client.delete('LST:FRAME:{}'.format(device_id))
                 # delete values
-                keys = await self._find_keys(redis_client, 'LST:DATA:{}:*'.format(device_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:{}:*'.format(device_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:{}:*'.format(device_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 # delete mapping
@@ -371,7 +375,10 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.srem('SET:DEVICE_TERM:{}'.format(term_info['device_id']), term_id)
                 await redis_client.delete('SET:TERM_ITEM:{}'.format(term_id))
                 # delete all values
-                keys = await self._find_keys(redis_client, 'LST:DATA:*:{}:*'.format(term_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:*:{}:*'.format(term_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:*:{}:*'.format(term_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 # delete from protocols mapping
@@ -453,7 +460,10 @@ class APIServer(ParamFunctionContainer):
                 if all_keys:
                     await redis_client.delete(*all_keys)
                 # delete all values
-                keys = await self._find_keys(redis_client, 'LST:DATA:*:*:{}'.format(item_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:*:*:{}'.format(item_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:*:*:{}'.format(item_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 return web.Response()
@@ -542,7 +552,10 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.delete('HS:MAPPING:{}:{}:{}'.format(
                         device_info['protocol'].upper(), device_id, term_item_dict['protocol_code']))
                 # delete all values
-                keys = await self._find_keys(redis_client, 'LST:DATA:*:{}:{}'.format(term_id, item_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:*:{}:{}'.format(term_id, item_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:*:{}:{}'.format(term_id, item_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 return web.Response()

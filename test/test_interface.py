@@ -25,13 +25,13 @@ class RedisTest(asynctest.TestCase):
             reader, writer = await asyncio.open_connection('127.0.0.1', 6379)
             loop.call_later(1, lambda w: w.close(), writer)
             data = await reader.readexactly(100)
-            print('Received: %r' % data.decode())
+            logger.debug('Received: %r', data.decode())
             # print("data={}".format(data))
             self.assertEqual(len(data), 0)
         except asyncio.IncompleteReadError:
-            print('stream closed!')
+            logger.debug('stream closed!')
         except Exception as e:
-            print('e=', repr(e))
+            logger.error('e=', repr(e))
 
     async def test_redis_listen(self):
         pub_client = await aioredis.create_redis(('localhost', 6379), db=1)
@@ -259,11 +259,11 @@ class InterfaceTest(asynctest.TestCase):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, mock_data.device1_term10_item2000)
+            self.assertDictEqual(rst, mock_data.device1_term10_item1000)
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas/-1') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertEqual(rst, mock_data.device1_term10_item2000[-1])
+            self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99/terms/99/items/99/datas') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()

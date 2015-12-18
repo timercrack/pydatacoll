@@ -47,26 +47,26 @@ term20_item1000 = {'id': '3', 'term_id': '20', 'item_id': '1000', 'protocol_code
                    'base_val': '0', 'coefficient': '1'}
 term30_item1000 = {'id': '4', 'term_id': '30', 'item_id': '1000', 'protocol_code': '100', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
-device1_term10_item1000 = [
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 0).isoformat(sep=' '), 100)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 1).isoformat(sep=' '), 101)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 2).isoformat(sep=' '), 102)),
-]
-device1_term10_item2000 = [
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 3).isoformat(sep=' '), 1)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 4).isoformat(sep=' '), 0)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 5).isoformat(sep=' '), 1)),
-]
-device1_term20_item1000 = [
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 6).isoformat(sep=' '), 200)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 7).isoformat(sep=' '), 201)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 8).isoformat(sep=' '), 202)),
-]
-device2_term30_item1000 = [
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 9).isoformat(sep=' '), 300)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 10).isoformat(sep=' '), 301)),
-    json.dumps((datetime.datetime(2015, 12, 1, 8, 50, 15, 11).isoformat(sep=' '), 302)),
-]
+device1_term10_item1000 = {
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 1).isoformat(): '100',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 2).isoformat(): '101',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 3).isoformat(): '102',
+}
+device1_term10_item2000 = {
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 4).isoformat(): '1',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 5).isoformat(): '0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 6).isoformat(): '1',
+}
+device1_term20_item1000 = {
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 7).isoformat(): '100',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 8).isoformat(): '101',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 9).isoformat(): '102',
+}
+device2_term30_item1000 = {
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 9): '100',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 10): '101',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 11): '102',
+}
 
 
 def generate():
@@ -100,9 +100,11 @@ def generate():
         DEVICE_ID=1, PROTOCOL_CODE=300), term20_item1000)
     redis_client.hmset('HS:MAPPING:IEC104:{DEVICE_ID}:{PROTOCOL_CODE}'.format(
         DEVICE_ID=2, PROTOCOL_CODE=100), term30_item1000)
-    value_count = 3
-    for idx in range(value_count):
-        redis_client.rpush("LST:DATA:1:10:1000", device1_term10_item2000[idx])
-        redis_client.rpush("LST:DATA:1:10:2000", device1_term20_item1000[idx])
-        redis_client.rpush("LST:DATA:1:20:1000", device1_term10_item1000[idx])
-        redis_client.rpush("LST:DATA:2:30:1000", device2_term30_item1000[idx])
+    redis_client.rpush("LST:DATA_TIME:1:10:1000", *sorted(device1_term10_item1000.keys()))
+    redis_client.rpush("LST:DATA_TIME:1:10:2000", *sorted(device1_term10_item2000.keys()))
+    redis_client.rpush("LST:DATA_TIME:1:20:1000", *sorted(device1_term20_item1000.keys()))
+    redis_client.rpush("LST:DATA_TIME:2:30:1000", *sorted(device2_term30_item1000.keys()))
+    redis_client.hmset("HS:DATA:1:10:1000", device1_term10_item1000)
+    redis_client.hmset("HS:DATA:1:10:2000", device1_term10_item2000)
+    redis_client.hmset("HS:DATA:1:20:1000", device1_term20_item1000)
+    redis_client.hmset("HS:DATA:2:30:1000", device2_term30_item1000)

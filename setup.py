@@ -10,3 +10,4 @@ setup(
         author='JeffChen',
         author_email='timercrack@gmail.com',
         description='Universal Data Acquisition System'
+)

@@ -10,7 +10,7 @@ logger = my_logger.get_logger('FormulaCalc')
 
 
 class FormulaCalc(BaseModule):
-    mysql_pool = None
+    not_implemented = True
 
     async def start(self):
         pass

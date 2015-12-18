@@ -337,7 +337,7 @@ class IEC104Device(BaseDevice):
         self.task_handler = self.io_loop.call_later(
                 time_delta.seconds, lambda: self.io_loop.create_task(self.run_task()))
 
-    def fresh_task(self, term_id, item_id, delete=False):
+    def fresh_task(self, term_dict, term_item_dict, delete=False):
         pass
 
     def prepare_call_frame(self, term_item_dict):
