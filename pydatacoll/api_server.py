@@ -355,6 +355,8 @@ class APIServer(ParamFunctionContainer):
                     if term_dict['device_id'] != old_term['device_id']:
                         await redis_client.publish('CHANNEL:TERM_DEL', json.dumps(old_term))
                         await redis_client.publish('CHANNEL:TERM_ADD', term_data)
+                    else:
+                        await redis_client.publish('CHANNEL:TERM_FRESH', term_data)
                 return web.Response()
         except Exception as e:
             logger.error('update_term failed: %s', repr(e), exc_info=True)
@@ -446,7 +448,7 @@ class APIServer(ParamFunctionContainer):
                 keys = await self._find_keys(redis_client, 'SET:TERM_ITEM:*')
                 for key in keys:
                     await redis_client.srem(key, item_id)
-                # delete from term->item hash
+                # delete from term->item hash, TODO: publish msg to CHANNEL:TERM_ITEM_DEL
                 keys = await self._find_keys(redis_client, 'HS:TERM_ITEM:*:{}'.format(item_id))
                 if keys:
                     self.redis_client.delete(*keys)
