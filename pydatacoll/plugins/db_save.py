@@ -39,10 +39,12 @@ class DBSaver(BaseModule):
             with (await self.redis_pool) as redis_client:
                 term_item = await redis_client.hgetall('HS:TERM_ITEM:{param.term_id}:{param.item_id}'.format(param=param))
                 if term_item and 'db_save_sql' in term_item:
-                    last_value = await redis_client.lindex('LST:DATA:{}:{}:{}'.format(
+                    last_value = None
+                    last_key = await redis_client.lindex('LST:DATA_TIME:{}:{}:{}'.format(
                             param.device_id, param.term_id, param.item_id), -1)
-                    if last_value:
-                        last_value = json.loads(last_value)
+                    if last_key:
+                        last_value = await redis_client.hget('HS:DATA:{}:{}:{}'.format(
+                            param.device_id, param.term_id, param.item_id), last_key)
                     if not last_value or not math.isclose(param.value, last_value[1], rel_tol=1e-04):
                         conn = await self.mysql_pool.acquire()
                         # print('conn=', conn)

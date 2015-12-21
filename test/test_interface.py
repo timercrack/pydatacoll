@@ -85,6 +85,55 @@ class InterfaceTest(asynctest.TestCase):
             rst = await r.json()
             self.assertDictEqual(rst, TERM_PROTOCOLS)
 
+    async def test_formula_CRUD(self):
+        async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas') as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.json()
+            self.assertSequenceEqual(rst, ['1', '2', '3'])
+        async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas/1') as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.json()
+            self.assertDictEqual(rst, mock_data.formula1)
+        async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas/99') as r:
+            self.assertEqual(r.status, 404)
+            rst = await r.text()
+            self.assertEqual(rst, 'formula_id not found!')
+
+        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.hgetall('HS:FORMULA:4')
+            self.assertEqual(rst['name'], '测试集中器4')
+            rst = self.redis_client.sismember('SET:FORMULA', 4)
+            self.assertTrue(rst)
+        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
+            self.assertEqual(r.status, 409)
+            rst = await r.text()
+            self.assertEqual(rst, 'formula already exists!')
+
+        mock_data.test_formula['name'] = '测试集中器5'
+        mock_data.test_formula['id'] = 5
+        async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/4', data=json.dumps(mock_data.test_formula)) as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.exists('HS:FORMULA:4')
+            self.assertFalse(rst)
+            rst = self.redis_client.sismember('SET:FORMULA', 4)
+            self.assertFalse(rst)
+            rst = self.redis_client.hgetall('HS:FORMULA:5')
+            self.assertEqual(rst['name'], '测试集中器5')
+            rst = self.redis_client.sismember('SET:FORMULA', 5)
+            self.assertTrue(rst)
+        async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/99', data=json.dumps(mock_data.test_formula)) as r:
+            self.assertEqual(r.status, 404)
+            rst = await r.text()
+            self.assertEqual(rst, 'formula_id not found!')
+
+        async with aiohttp.delete('http://127.0.0.1:8080/api/v1/formulas/5') as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.exists('HS:FORMULA:5')
+            self.assertFalse(rst)
+            rst = self.redis_client.sismember('SET:FORMULA', 5)
+            self.assertFalse(rst)
+
     async def test_device_CRUD(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices') as r:
             self.assertEqual(r.status, 200)

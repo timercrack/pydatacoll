@@ -8,14 +8,17 @@
     设备2：（在线）
         终端30：（离线）
             指标1000（104地址=100）
-    设备3：（离线）
-        无
+            指标2000（计算指标）
+    设备3：（计算设备）
+        终端40：(计算终端）
+            指标1000（计算公式=max(设备1终端10指标1000, 设备2终端30指标1000)）
 """
 import datetime
 import json
 
 import redis
 
+test_formula = {'id': '4', 'formula': '1+1', 'device_id': '2', 'term_id': '30', 'item_id': '2000'}
 test_device = {'id': '4', 'name': '测试集中器4', 'ip': '127.0.0.1', 'port': '2407', 'identify': '444', 'status': 'on',
                'protocol': 'iec104'}
 test_term = {'id': '40', 'name': '测试终端4', 'address': '44', 'identify': 'term40',
@@ -24,21 +27,22 @@ test_item = {'id': '3000', 'name': 'C相电压', 'view_code': '3000', 'func_type
 test_term_item = {'id': '5', 'term_id': '20', 'item_id': '2000', 'protocol_code': '400', 'base_val': '0',
                   'coefficient': '1'}
 
+formula1 = {'id': '1', 'formula': '1+1', 'device_id': '2', 'term_id': '30', 'item_id': '2000'}
 device1 = {'id': '1', 'name': '测试集中器1', 'ip': '127.0.0.1', 'port': '2404', 'status': 'on',
            'identify': '111', 'protocol': 'iec104'}
 device2 = {'id': '2', 'name': '测试集中器2', 'ip': '127.0.0.1', 'port': '2405', 'status': 'on',
            'identify': '222', 'protocol': 'iec104'}
-device3 = {'id': '3', 'name': '测试集中器3', 'ip': '127.0.0.1', 'port': '2406', 'status': 'on',
-           'identify': '333', 'protocol': 'iec104'}
+device3 = {'id': '3', 'name': '测试集中器3', 'identify': '333', 'protocol': 'formula'}
 device_list = [device1, device2, device3]
 term10 = {'id': '10', 'name': '测试终端1', 'address': '5', 'identify': 'term10', 'protocol': 'dlt645',
           'device_id': '1'}
 term20 = {'id': '20', 'name': '测试终端2', 'address': '6', 'identify': 'term20', 'protocol': 'dlt645',
           'device_id': '1'}
-term30 = {'id': '30', 'name': '测试终端3', 'address': '7', 'identify': 'term30', 'protocol': 'dlt645',
-          'device_id': '2'}
+term30 = {'id': '30', 'name': '测试终端3', 'protocol': 'formula', 'device_id': '3'}
 item1000 = {'id': '1000', 'name': 'A相电压', 'view_code': '1000', 'func_type': '遥测量'}
-item2000 = {'id': '2000', 'name': '继电器开关', 'view_code': '200', 'func_type': '遥控量'}
+item2000 = {'id': '2000', 'name': '继电器开关', 'view_code': '2000', 'func_type': '遥控量'}
+item3000 = {'id': '3000', 'name': 'A相电流', 'view_code': '3000', 'func_type': '遥测量'}
+item4000 = {'id': '4000', 'name': 'A相谐波含有率', 'view_code': '4000', 'func_type': '遥测量'}
 term10_item1000 = {'id': '1', 'term_id': '10', 'item_id': '1000', 'protocol_code': '100', 'code_type': '36',
                    'base_val': '0', 'coefficient': '1'}
 term10_item2000 = {'id': '2', 'term_id': '10', 'item_id': '2000', 'protocol_code': '200', 'code_type': '63',

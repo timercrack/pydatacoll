@@ -44,11 +44,11 @@ class DBSaverTest(asynctest.TestCase):
         })
         pub_data = json.dumps({
             'device_id': 1, 'term_id': 10, 'item_id': 20,
-            'time': datetime.datetime.now().isoformat(sep=' '), 'value': 123.4,
+            'time': datetime.datetime.now().isoformat(), 'value': 123.4,
         })
         self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', pub_data)
         await asyncio.sleep(1)
-        self.redis_client.rpush('LST:DATA:1:10:20', json.dumps((datetime.datetime.now().isoformat(sep=' '), 123.4)))
+        self.redis_client.rpush('LST:DATA:1:10:20', json.dumps((datetime.datetime.now().isoformat(), 123.4)))
         self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', pub_data)
         self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', pub_data)
         await asyncio.sleep(1)

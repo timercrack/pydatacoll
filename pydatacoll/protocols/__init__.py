@@ -33,7 +33,7 @@ class BaseDevice(object, metaclass=ABCMeta):
             with (await self.redis_pool) as redis_client:
                 await redis_client.rpush("LST:FRAME:{}".format(self.device_id),
                                          '{time},{type},{frame}'.format(
-                                                 time=datetime.datetime.now().isoformat(sep=' '),
+                                                 time=datetime.datetime.now().isoformat(),
                                                  type="send" if send is True else "recv", frame=frame.hex()))
         except Exception as e:
             logger.error("device[%s] save_frame failed: %s", self.device_id, repr(e))
@@ -108,7 +108,7 @@ class BaseDevice(object, metaclass=ABCMeta):
                         data_value = data_value * float(term_item['coefficient']) + float(term_item['base_val'])
                     json_data = json.dumps({
                         'device_id': self.device_id, 'term_id': term_item['term_id'], 'item_id': term_item['item_id'],
-                        'time': data_time.isoformat(sep=' '), 'value': data_value,
+                        'time': data_time.isoformat(), 'value': data_value,
                     })
                     pub_channel = 'CHANNEL:DEVICE_{}:{}:{}:{}'.format(
                             method.upper(), self.device_id, term_item['term_id'], term_item['item_id'])
