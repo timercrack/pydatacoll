@@ -3,7 +3,6 @@ import functools
 from collections import namedtuple
 import math
 import datetime
-from numpy.matlib import randn
 try:
     import ujson as json
 except ImportError:
@@ -133,7 +132,7 @@ class FormulaCalc(BaseModule):
             interp = Interpreter()
             interp.symtable['np'] = np
             interp.symtable['pd'] = pd
-            ts = pd.Series(randn(10), index=pd.date_range(start='1/1/2016', periods=10))
+            ts = pd.Series(np.random.randn(10), index=pd.date_range(start='1/1/2016', periods=10))
             for idx in range(8):
                 param_key = 'p{}'.format(idx)
                 if param_key in check_dict:

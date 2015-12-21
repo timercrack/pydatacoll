@@ -22,6 +22,8 @@ class IEC104DeviceTest(asynctest.TestCase):
         self.server_list = list()
         mock_data.generate()
         for device in mock_data.device_list:
+            if 'port' not in device:
+                continue
             self.server_list.append(
                 self.loop.run_until_complete(self.loop.create_server(MockDevice, '127.0.0.1', device['port'])))
 

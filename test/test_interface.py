@@ -89,7 +89,7 @@ class InterfaceTest(asynctest.TestCase):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['1', '2', '3'])
+            self.assertSequenceEqual(rst, ['1'])
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas/1') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -101,25 +101,25 @@ class InterfaceTest(asynctest.TestCase):
 
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
             self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:FORMULA:4')
-            self.assertEqual(rst['name'], '测试集中器4')
-            rst = self.redis_client.sismember('SET:FORMULA', 4)
+            rst = self.redis_client.hgetall('HS:FORMULA:9')
+            self.assertEqual(rst['formula'], '1+1')
+            rst = self.redis_client.sismember('SET:FORMULA', 9)
             self.assertTrue(rst)
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
             self.assertEqual(r.status, 409)
             rst = await r.text()
             self.assertEqual(rst, 'formula already exists!')
 
-        mock_data.test_formula['name'] = '测试集中器5'
+        mock_data.test_formula['formula'] = '2+2'
         mock_data.test_formula['id'] = 5
         async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/4', data=json.dumps(mock_data.test_formula)) as r:
             self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:FORMULA:4')
+            rst = self.redis_client.exists('HS:FORMULA:9')
             self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:FORMULA', 4)
+            rst = self.redis_client.sismember('SET:FORMULA', 9)
             self.assertFalse(rst)
             rst = self.redis_client.hgetall('HS:FORMULA:5')
-            self.assertEqual(rst['name'], '测试集中器5')
+            self.assertEqual(rst['formula'], '2+2')
             rst = self.redis_client.sismember('SET:FORMULA', 5)
             self.assertTrue(rst)
         async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/99', data=json.dumps(mock_data.test_formula)) as r:
@@ -133,6 +133,18 @@ class InterfaceTest(asynctest.TestCase):
             self.assertFalse(rst)
             rst = self.redis_client.sismember('SET:FORMULA', 5)
             self.assertFalse(rst)
+
+        formula_check = {'formula': 'p1+10', 'p1': 'HS:DATA:1:10:1000'}
+        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.text()
+            self.assertEqual(rst, 'OK')
+        formula_check['formula'] = 'p1+p2'
+        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.text()
+            logger.debug('rst=%s', rst)
+            self.assertNotEqual(rst, 'OK')
 
     async def test_device_CRUD(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices') as r:
@@ -187,7 +199,7 @@ class InterfaceTest(asynctest.TestCase):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['10', '20', '30'])
+            self.assertSequenceEqual(rst, ['10', '20', '30', '40'])
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -207,11 +219,11 @@ class InterfaceTest(asynctest.TestCase):
 
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/terms', data=json.dumps(mock_data.test_term)) as r:
             self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:TERM:40')
-            self.assertEqual(rst['name'], '测试终端4')
-            rst = self.redis_client.sismember('SET:TERM', 40)
+            rst = self.redis_client.hgetall('HS:TERM:90')
+            self.assertEqual(rst['name'], '测试终端9')
+            rst = self.redis_client.sismember('SET:TERM', 90)
             self.assertTrue(rst)
-            rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 40)
+            rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 90)
             self.assertEqual(rst, True)
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/terms', data=json.dumps(mock_data.test_term)) as r:
             self.assertEqual(r.status, 409)
@@ -221,13 +233,13 @@ class InterfaceTest(asynctest.TestCase):
         mock_data.test_term['name'] = '测试终端5'
         mock_data.test_term['id'] = 50
         mock_data.test_term['device_id'] = 2
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/terms/40', data=json.dumps(mock_data.test_term)) as r:
+        async with aiohttp.put('http://127.0.0.1:8080/api/v1/terms/90', data=json.dumps(mock_data.test_term)) as r:
             self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:TERM:40')
+            rst = self.redis_client.exists('HS:TERM:90')
             self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:TERM', 40)
+            rst = self.redis_client.sismember('SET:TERM', 90)
             self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 40)
+            rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 90)
             self.assertFalse(rst)
             rst = self.redis_client.hgetall('HS:TERM:50')
             self.assertEqual(rst['name'], '测试终端5')
