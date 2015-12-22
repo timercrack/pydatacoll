@@ -135,7 +135,7 @@ class IEC104DeviceTest(asynctest.TestCase):
                     cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(ch1))
-            await device.ctrl_data(10, 20, 123.4)
+            await device.ctrl_data({'term_id': 10, 'item_id': 20, 'value': 123.4})
             rst = await cb
             await sub_client.unsubscribe('CHANNEL:DEVICE_CTRL:1:10:20')
             await tsk
@@ -161,7 +161,7 @@ class IEC104DeviceTest(asynctest.TestCase):
                     cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
-            await device.call_data(10, 20)
+            await device.call_data({'term_id': 10, 'item_id': 20})
             rst = await cb
             await sub_client.unsubscribe('CHANNEL:DEVICE_CALL:1:10:20')
             await tsk

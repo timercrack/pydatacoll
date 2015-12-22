@@ -15,7 +15,9 @@
 import datetime
 import redis
 
-test_formula = {'id': '9', 'formula': '1+1', 'device_id': '2', 'term_id': '30', 'item_id': '2000'}
+test_formula = {'id': '9', 'formula': 'p1+p2', 'device_id': '2', 'term_id': '30', 'item_id': '2000',
+                'p1': '1:10:1000',
+                'p2': '2:30:1000'}
 test_device = {'id': '4', 'name': '测试集中器4', 'ip': '127.0.0.1', 'port': '2407', 'identify': '444',
                'status': 'on', 'protocol': 'iec104'}
 test_term = {'id': '90', 'name': '测试终端9', 'address': '99', 'identify': 'term90',
@@ -24,7 +26,7 @@ test_item = {'id': '3000', 'name': 'C相电压', 'view_code': '3000', 'func_type
 test_term_item = {'id': '9', 'term_id': '20', 'item_id': '2000', 'protocol_code': '400',
                   'base_val': '0', 'coefficient': '1'}
 
-formula1 = {'id': '1', 'formula': 'max(p1[-1], p2[-1])', 'device_id': '2', 'term_id': '30', 'item_id': '2000',
+formula1 = {'id': '1', 'formula': 'max(p1[-1], p2[-1])', 'device_id': '3', 'term_id': '40', 'item_id': '1000',
             'p1': 'HS:DATA:1:10:1000',
             'p2': 'HS:DATA:2:30:1000'}
 formula_list = [formula1]
@@ -86,6 +88,9 @@ def generate():
     [redis_client.hmset('HS:ITEM:{}'.format(item['id']), item) for item in item_list]
     [redis_client.hmset('HS:FORMULA:{}'.format(formula['id']), formula) for formula in formula_list]
     [redis_client.hmset('HS:TERM_ITEM:{}:{}'.format(tm['term_id'], tm['item_id']), tm) for tm in term_item_list]
+    redis_client.sadd('SET:FORMULA_PARAM:1:10:1000', 1)
+    redis_client.sadd('SET:FORMULA_PARAM:2:30:1000', 1)
+    redis_client.sadd('SET:FORMULA', 1)
     redis_client.sadd('SET:DEVICE', 1, 2, 3)
     redis_client.sadd('SET:TERM', 10, 20, 30, 40)
     redis_client.sadd('SET:ITEM', 1000, 2000)

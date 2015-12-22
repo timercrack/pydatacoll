@@ -1,3 +1,4 @@
+from io import StringIO
 from numbers import Number
 import functools
 from collections import namedtuple
@@ -7,7 +8,7 @@ try:
     import ujson as json
 except ImportError:
     import json
-from asteval import Interpreter
+from pydatacoll.utils.asteval import Interpreter
 import numpy as np
 import pandas as pd
 from pydatacoll.plugins import BaseModule
@@ -18,10 +19,9 @@ logger = my_logger.get_logger('FormulaCalc')
 
 
 class FormulaCalc(BaseModule):
-    not_implemented = True
     formula_dict = dict()  # HS:TERM_ITEM:{term_id}:{item_id} -> value of HS:FORMULA:{formula_id}
     pandas_dict = dict()  # HS:DATA:{formula_id}:{term_id}:{item_id} -> pandas.Series
-    interp = Interpreter()
+    interp = Interpreter(use_numpy=False)
 
     async def start(self):
         try:
@@ -37,7 +37,7 @@ class FormulaCalc(BaseModule):
             logger.error('start failed: %s', repr(ee), exc_info=True)
 
     async def stop(self):
-        await self.del_formula()
+        await self.del_formula(None)
 
     @param_function(channel='CHANNEL:FORMULA_ADD')
     async def add_formula(self, _, formula_dict: dict):
@@ -45,23 +45,26 @@ class FormulaCalc(BaseModule):
 
     @param_function(channel='CHANNEL:FORMULA_FRESH')
     async def fresh_formula(self, _, formula_dict: dict):
-        formula_id = self.formula_dict.get(formula_dict['id'])
-        if formula_id:
-            await self.del_formula(formula_id)
-        self.formula_dict[formula_dict['id']] = formula_dict
-        for idx in range(8):
-            param = formula_dict.get('p{}'.format(idx))
-            if param and param not in self.pandas_dict:
-                with (await self.redis_pool) as redis_client:
-                    data_dict = await redis_client.hgetall(param)
-                    self.pandas_dict[param] = pd.Series(data_dict, dtype=float)
-                    self.pandas_dict[param].index = self.pandas_dict[param].index.to_datetime()
-        with (await self.redis_pool) as redis_client:
-            data_key = redis_client.lindex("LST:DATA_IME:{}:{}:{}".format(
-                formula_dict['device_id'], formula_dict['term_id'], formula_dict['item_id']
-            ))
-            if not data_key:
-                await self.calculate(formula_id)
+        try:
+            formula_id = str(formula_dict['id'])
+            with (await self.redis_pool) as redis_client:
+                if formula_id in self.formula_dict:
+                    await self.del_formula(_, formula_id)
+                for idx in range(8):
+                    param = formula_dict.get('p{}'.format(idx))
+                    if param and param not in self.pandas_dict:
+                        data_dict = await redis_client.hgetall(param)
+                        self.pandas_dict[param] = pd.Series(data_dict, dtype=float)
+                        self.pandas_dict[param].index = self.pandas_dict[param].index.to_datetime()
+                self.formula_dict[formula_id] = formula_dict
+                logger.debug("fresh_formula add new formula: %s", self.formula_dict)
+                data_key = await redis_client.lindex("LST:DATA_TIME:{}:{}:{}".format(
+                    formula_dict['device_id'], formula_dict['term_id'], formula_dict['item_id']), -1)
+                if not data_key:
+                    logger.debug('fresh_formula formula value not exist, calculate now')
+                    await self.calculate(formula_id)
+        except Exception as ee:
+            logger.error('fresh_formula failed: %s', repr(ee), exc_info=True)
 
     @param_function(channel='CHANNEL:FORMULA_DEL')
     async def del_formula(self, _, formula_id=None):
@@ -75,20 +78,30 @@ class FormulaCalc(BaseModule):
         try:
             logger.debug('param_update: got msg, channel=%s, dat_dict=%s', channel, data_dict)
             param = namedtuple('Param', data_dict.keys())(**data_dict)
+            data_dict_key = 'HS:DATA:{}:{}:{}'.format(param.device_id, param.term_id, param.item_id)
             with (await self.redis_pool) as redis_client:
-                formula_list = await redis_client.smembers('SET:FORMULA_PARAM:{}:{}:{}'.format(
-                        param.device_id, param.term_id, param.item_id))
+                formula_param_key = 'SET:FORMULA_PARAM:{}:{}:{}'.format(param.device_id, param.term_id, param.item_id)
+                formula_list = await redis_client.smembers(formula_param_key)
                 if formula_list:
+                    logger.debug("this arg has formula refer to, formula list=%s", formula_list)
                     last_value = None
-                    last_key = await redis_client.lindex('LST:DATA_TIME:{}:{}:{}'.format(
-                            param.device_id, param.term_id, param.item_id), -1)
+                    data_time_key = 'LST:DATA_TIME:{}:{}:{}'.format(param.device_id, param.term_id, param.item_id)
+                    last_key = await redis_client.lindex(data_time_key, -2)
                     if last_key:
-                        last_value = await redis_client.hget('HS:DATA:{}:{}:{}'.format(
-                            param.device_id, param.term_id, param.item_id), last_key)
-                    if not last_value or not math.isclose(param.value, last_value[1], rel_tol=1e-04):
-                        self.pandas_dict[pd.to_datetime(param.time)] = float(param.value)
+                        last_value = await redis_client.hget(data_dict_key, last_key)
+                    else:
+                        logger.debug("not found data in %s", data_time_key)
+                    if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
+                        self.pandas_dict[data_dict_key][pd.to_datetime(param.time)] = float(param.value)
+                        logger.debug('%s value=%s,last_value=%s changed, calculate formula',
+                                     data_dict_key, param.value, last_value)
                         for formula_id in formula_list:
                             await self.calculate(formula_id)
+                    else:
+                        logger.debug("%s value=%s,last_value=%s not change, ignored",
+                                     data_dict_key, param.value, last_value)
+                else:
+                    logger.debug("%s not exists, ignored", formula_param_key)
         except Exception as ee:
             logger.error('param_update failed: %s', repr(ee), exc_info=True)
 
@@ -102,7 +115,10 @@ class FormulaCalc(BaseModule):
                 if param_key in formula:
                     self.interp.symtable[param_key] = self.pandas_dict[formula[param_key]]
             value = self.interp(self.formula_dict[formula_id]['formula'])
+            logger.debug("calculate formula=%s, value=%s, type(value)=%s",
+                         self.formula_dict[formula_id]['formula'], value, type(value))
             if isinstance(value, Number):
+                value = float(value)
                 with (await self.redis_pool) as redis_client:
                     data_key = "{}:{}:{}".format(formula['device_id'], formula['term_id'], formula['item_id'])
                     time_str = datetime.datetime.now().isoformat()
@@ -120,8 +136,14 @@ class FormulaCalc(BaseModule):
         try:
             with (await self.redis_pool) as redis_client:
                 check_rst = self.do_check(**check_dict)
-                await redis_client.publish("CHANNEL:FORMULA_CHECK_RESULT:{}".format(
-                        len(check_dict['formula'])), check_rst)
+                pub_ch = "CHANNEL:FORMULA_CHECK_RESULT:{}".format(len(check_dict['formula']))
+                # TODO: fixme
+                retry = 5
+                while retry > 0:
+                    rst = await redis_client.publish(pub_ch, check_rst)
+                    if rst != 0:
+                        break
+                    retry -= 1
         except Exception as ee:
             logger.error('param_update failed: %s', repr(ee), exc_info=True)
 
@@ -129,17 +151,19 @@ class FormulaCalc(BaseModule):
     def do_check(self, **check_dict):
         rst = 'OK'
         try:
-            interp = Interpreter()
+            output = StringIO()
+            interp = Interpreter(writer=output, use_numpy=False)
             interp.symtable['np'] = np
             interp.symtable['pd'] = pd
             ts = pd.Series(np.random.randn(10), index=pd.date_range(start='1/1/2016', periods=10))
             for idx in range(8):
                 param_key = 'p{}'.format(idx)
                 if param_key in check_dict:
-                    self.interp.symtable[param_key] = ts
+                    interp.symtable[param_key] = ts
             value = interp(check_dict['formula'])
             if len(interp.error) > 0:
-                rst = interp.error_msg
+                rst = output.getvalue()
+                print(rst)
             elif not isinstance(value, Number):
                 rst = "result type must be Number!"
 

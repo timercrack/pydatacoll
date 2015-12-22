@@ -275,7 +275,13 @@ class APIServer(ParamFunctionContainer):
                     return web.Response(status=409, text='formula already exists!')
                 self.redis_client.hmset('HS:FORMULA:{}'.format(formula_dict['id']), formula_dict)
                 await redis_client.sadd('SET:FORMULA', formula_dict['id'])
-                await redis_client.publish('CHANNEL:FORMULA_ADD', formula_data)
+                for idx in range(8):
+                    param_key = 'p{}'.format(idx)
+                    param = formula_dict.get(param_key)
+                    if param:
+                        formula_dict[param_key] = 'HS:DATA:{}'.format(param)
+                        await redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param), formula_dict[param_key])
+                await redis_client.publish('CHANNEL:FORMULA_ADD', json.dumps(formula_dict))
                 return web.Response()
         except Exception as e:
             logger.error('create_formula failed: %s', repr(e), exc_info=True)
@@ -289,14 +295,8 @@ class APIServer(ParamFunctionContainer):
                 old_formula = await redis_client.hgetall('HS:FORMULA:{}'.format(formula_id))
                 if not old_formula:
                     return web.Response(status=404, text='formula_id not found!')
-                formula_data = await self._read_data(request)
-                formula_dict = json.loads(formula_data)
-                if str(formula_dict['id']) != formula_id:
-                    await self.del_formula(request)
-                    await self.create_formula(request)
-                else:
-                    self.redis_client.hmset('HS:FORMULA:{}'.format(formula_id), formula_dict)
-                    await redis_client.publish('CHANNEL:FORMULA_FRESH', formula_data)
+                await self.del_formula(request)
+                await self.create_formula(request)
                 return web.Response()
         except Exception as e:
             logger.error('update_formula failed: %s', repr(e), exc_info=True)
@@ -311,6 +311,11 @@ class APIServer(ParamFunctionContainer):
                 if not formula_dict:
                     return web.Response(status=404, text='formula_id not found!')
                 await redis_client.publish('CHANNEL:FORMULA_DEL', json.dumps(formula_id))
+                for idx in range(8):
+                    param_key = 'p{}'.format(idx)
+                    param = formula_dict.get(param_key)
+                    if param:
+                        await redis_client.srem('SET:FORMULA_PARAM:{}'.format(param[8:]), formula_id)
                 await redis_client.delete('HS:FORMULA:{}'.format(formula_id))
                 await redis_client.srem('SET:FORMULA', formula_id)
                 return web.Response()
@@ -745,17 +750,17 @@ class APIServer(ParamFunctionContainer):
             formula_data = await self._read_data(request)
             formula_dict = json.loads(formula_data)
             logger.debug('formula_check arg=%s', formula_dict)
-            await redis_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
             channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(formula_dict['formula']))
-            res = await redis_client.subscribe(channel_name)
             cb = asyncio.futures.Future()
 
             async def reader(ch):
                 while await ch.wait_message():
-                    msg = await ch.get_json()
+                    msg = await ch.get(encoding='utf-8')
                     logger.debug('formula_check got msg: %s', msg)
                     cb.set_result(msg)
 
+            await redis_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
+            res = await redis_client.subscribe(channel_name)
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
             await redis_client.unsubscribe(channel_name)
@@ -767,6 +772,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('formula_check failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
                 await redis_client.unsubscribe(channel_name)
+                self.redis_pool.release(redis_client)
             return web.Response(status=400, text=repr(e))
 
 

@@ -41,11 +41,11 @@ class DBSaver(BaseModule):
                 if term_item and 'db_save_sql' in term_item:
                     last_value = None
                     last_key = await redis_client.lindex('LST:DATA_TIME:{}:{}:{}'.format(
-                            param.device_id, param.term_id, param.item_id), -1)
+                            param.device_id, param.term_id, param.item_id), -2)
                     if last_key:
                         last_value = await redis_client.hget('HS:DATA:{}:{}:{}'.format(
                             param.device_id, param.term_id, param.item_id), last_key)
-                    if not last_value or not math.isclose(param.value, last_value[1], rel_tol=1e-04):
+                    if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                         conn = await self.mysql_pool.acquire()
                         # print('conn=', conn)
                         # with (await self.mysql_pool) as conn:

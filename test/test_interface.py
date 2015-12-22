@@ -66,7 +66,7 @@ class InterfaceTest(asynctest.TestCase):
         cls.mock_device.start()
         time.sleep(1)
         cls.api_server.start()
-        time.sleep(1)
+        time.sleep(2)
 
     @classmethod
     def tearDownClass(cls):
@@ -102,7 +102,7 @@ class InterfaceTest(asynctest.TestCase):
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
             self.assertEqual(r.status, 200)
             rst = self.redis_client.hgetall('HS:FORMULA:9')
-            self.assertEqual(rst['formula'], '1+1')
+            self.assertEqual(rst['formula'], mock_data.test_formula['formula'])
             rst = self.redis_client.sismember('SET:FORMULA', 9)
             self.assertTrue(rst)
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
@@ -112,7 +112,7 @@ class InterfaceTest(asynctest.TestCase):
 
         mock_data.test_formula['formula'] = '2+2'
         mock_data.test_formula['id'] = 5
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/4', data=json.dumps(mock_data.test_formula)) as r:
+        async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/9', data=json.dumps(mock_data.test_formula)) as r:
             self.assertEqual(r.status, 200)
             rst = self.redis_client.exists('HS:FORMULA:9')
             self.assertFalse(rst)
@@ -134,17 +134,20 @@ class InterfaceTest(asynctest.TestCase):
             rst = self.redis_client.sismember('SET:FORMULA', 5)
             self.assertFalse(rst)
 
-        formula_check = {'formula': 'p1+10', 'p1': 'HS:DATA:1:10:1000'}
+        formula_check = {'formula': 'p1[-1]+10', 'p1': 'HS:DATA:1:10:1000'}
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.text()
             self.assertEqual(rst, 'OK')
-        formula_check['formula'] = 'p1+p2'
+        formula_check['formula'] = 'p1[-1]+p2[-2]'
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.text()
-            logger.debug('rst=%s', rst)
-            self.assertNotEqual(rst, 'OK')
+            self.assertEqual(rst, """NameError
+   p1[-1]+p2[-2]
+           ^^^
+name 'p2' is not defined
+""")
 
     async def test_device_CRUD(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices') as r:
