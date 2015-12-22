@@ -42,15 +42,23 @@ class DBSaverTest(asynctest.TestCase):
             'db_save_sql': "insert into test_db_save(device_id,term_id,item_id,time,value) VALUES "
                            "({PARAM.device_id},{PARAM.term_id},{PARAM.item_id},'{PARAM.time}',{PARAM.value})"
         })
-        pub_data = json.dumps({
+        pub_data = {
             'device_id': 1, 'term_id': 10, 'item_id': 20,
-            'time': datetime.datetime.now().isoformat(sep=' '), 'value': 123.4,
-        })
-        self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', pub_data)
+            'time': datetime.datetime.now().isoformat(), 'value': 123.4,
+        }
+        time_str = datetime.datetime.now().isoformat()
+        self.redis_client.rpush('LST:DATA_TIME:1:10:20', time_str)
+        self.redis_client.hset('HS:DATA:1:10:20', time_str, 123.4)
+        self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', json.dumps(pub_data))
         await asyncio.sleep(1)
-        self.redis_client.rpush('LST:DATA:1:10:20', json.dumps((datetime.datetime.now().isoformat(sep=' '), 123.4)))
-        self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', pub_data)
-        self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', pub_data)
+        time_str = datetime.datetime.now().isoformat()
+        self.redis_client.rpush('LST:DATA_TIME:1:10:20', time_str)
+        self.redis_client.hset('HS:DATA:1:10:20', time_str, 123.4)
+        self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', json.dumps(pub_data))
+        time_str = datetime.datetime.now().isoformat()
+        self.redis_client.rpush('LST:DATA_TIME:1:10:20', time_str)
+        self.redis_client.hset('HS:DATA:1:10:20', time_str, 123.4)
+        self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', json.dumps(pub_data))
         await asyncio.sleep(1)
         self.cursor.execute("SELECT * FROM test_db_save")
         rst = self.cursor.fetchall()

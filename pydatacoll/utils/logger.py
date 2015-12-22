@@ -6,7 +6,7 @@ initLock = threading.Lock()
 rootLoggerInitialized = False
 
 log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
-level = logging.ERROR
+level = logging.DEBUG
 file_log = None  # File name
 console_log = True
 # sys_str = platform.system()
