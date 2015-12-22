@@ -679,7 +679,8 @@ class APIServer(ParamFunctionContainer):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('device_call got msg: %s', msg)
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
@@ -692,6 +693,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('device_call failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
                 await redis_client.unsubscribe(channel_name)
+                self.redis_pool.release(redis_client)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='POST', url=r'/api/v1/device_ctrl')
@@ -726,7 +728,8 @@ class APIServer(ParamFunctionContainer):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('device_ctrl got msg: %s', msg)
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
@@ -739,6 +742,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('device_ctrl failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
                 await redis_client.unsubscribe(channel_name)
+                self.redis_pool.release(redis_client)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='POST', url=r'/api/v1/formula_check')
@@ -751,17 +755,18 @@ class APIServer(ParamFunctionContainer):
             formula_dict = json.loads(formula_data)
             logger.debug('formula_check arg=%s', formula_dict)
             channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(formula_dict['formula']))
+            res = await redis_client.subscribe(channel_name)
             cb = asyncio.futures.Future()
 
             async def reader(ch):
                 while await ch.wait_message():
                     msg = await ch.get(encoding='utf-8')
-                    logger.debug('formula_check got msg: %s', msg)
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
-            await redis_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
-            res = await redis_client.subscribe(channel_name)
             tsk = asyncio.ensure_future(reader(res[0]))
+            with (await self.redis_pool) as pub_client:
+                await pub_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
             await redis_client.unsubscribe(channel_name)
             await tsk

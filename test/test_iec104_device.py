@@ -64,7 +64,7 @@ class IEC104DeviceTest(asynctest.TestCase):
         self.assertEqual(device.user_canceled, True)
 
         wrong_device = IEC104Device({'id': 9, 'ip': '127.0.0.1', 'port': 9999}, self.loop, self.redis_pool)
-        await asyncio.sleep(7)
+        await asyncio.sleep(6)
         self.assertEqual(wrong_device.connect_retry_count, 2)
         device.disconnect()
 
@@ -132,7 +132,8 @@ class IEC104DeviceTest(asynctest.TestCase):
             async def reader(ch):
                 while await ch.wait_message():
                     msg = await ch.get_json()
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(ch1))
             await device.ctrl_data({'term_id': 10, 'item_id': 20, 'value': 123.4})
@@ -158,7 +159,8 @@ class IEC104DeviceTest(asynctest.TestCase):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('got msg: %s', msg)
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
             await device.call_data({'term_id': 10, 'item_id': 20})

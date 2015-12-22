@@ -137,6 +137,7 @@ NUMPY_RENAMES = {'ln': 'log', 'asin': 'arcsin', 'acos': 'arccos',
                  'atan': 'arctan', 'atan2': 'arctan2', 'atanh':
                  'arctanh', 'acosh': 'arccosh', 'asinh': 'arcsinh'}
 
+
 def _open(filename, mode='r', buffering=0):
     """read only version of open()"""
     umode = 'r'
@@ -236,7 +237,7 @@ class ExceptionHolder(object):
         if col_offset > 0:
             out.append("    %s^^^" % ((col_offset)*' '))
         out.append(str(self.msg))
-        return (exc_name, '\n'.join(out))
+        return exc_name, '\n'.join(out)
 
 
 class NameFinder(ast.NodeVisitor):

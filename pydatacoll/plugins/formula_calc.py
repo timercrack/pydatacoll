@@ -137,13 +137,7 @@ class FormulaCalc(BaseModule):
             with (await self.redis_pool) as redis_client:
                 check_rst = self.do_check(**check_dict)
                 pub_ch = "CHANNEL:FORMULA_CHECK_RESULT:{}".format(len(check_dict['formula']))
-                # TODO: fixme
-                retry = 5
-                while retry > 0:
-                    rst = await redis_client.publish(pub_ch, check_rst)
-                    if rst != 0:
-                        break
-                    retry -= 1
+                await redis_client.publish(pub_ch, check_rst)
         except Exception as ee:
             logger.error('param_update failed: %s', repr(ee), exc_info=True)
 
@@ -152,7 +146,7 @@ class FormulaCalc(BaseModule):
         rst = 'OK'
         try:
             output = StringIO()
-            interp = Interpreter(writer=output, use_numpy=False)
+            interp = Interpreter(writer=output, err_writer=output, use_numpy=False)
             interp.symtable['np'] = np
             interp.symtable['pd'] = pd
             ts = pd.Series(np.random.randn(10), index=pd.date_range(start='1/1/2016', periods=10))
@@ -163,7 +157,6 @@ class FormulaCalc(BaseModule):
             value = interp(check_dict['formula'])
             if len(interp.error) > 0:
                 rst = output.getvalue()
-                print(rst)
             elif not isinstance(value, Number):
                 rst = "result type must be Number!"
 
