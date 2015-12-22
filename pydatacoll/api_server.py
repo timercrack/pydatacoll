@@ -18,7 +18,7 @@ from pydatacoll.utils.func_container import ParamFunctionContainer, param_functi
 from pydatacoll import plugins
 
 logger = my_logger.get_logger('APIServer')
-HANDLER_TIME_OUT = 15
+HANDLER_TIME_OUT = 10
 
 
 class APIServer(ParamFunctionContainer):
@@ -26,7 +26,10 @@ class APIServer(ParamFunctionContainer):
                  redis_pool: aioredis.RedisPool = None):
         super().__init__()
         self.port = port
-        self.io_loop = io_loop or asyncio.get_event_loop()
+        self.io_loop = io_loop
+        if self.io_loop is None:
+            self.io_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.io_loop)
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
                 functools.partial(aioredis.create_pool, ('localhost', 6379),
                                   db=1, minsize=5, maxsize=10, encoding='utf-8')())
@@ -65,6 +68,13 @@ class APIServer(ParamFunctionContainer):
             logger.error('_find_keys failed: %s', repr(e), exc_info=True)
         return all_keys
 
+    @staticmethod
+    async def _read_data(request):
+        data = await request.read()
+        if isinstance(data, bytes):
+            data = data.decode('utf-8')
+        return data
+
     @param_function(method='GET', url=r'/')
     async def get_index(self, request):
         doc_list = ['PyDataColl is running, available API:\n']
@@ -80,15 +90,37 @@ class APIServer(ParamFunctionContainer):
         return web.Response(text='\n'.join(doc_list))
 
     @param_function(method='GET', url=r'/api/v1/device_protocols')
-    async def get_device_protocol_list(self, request):
+    async def get_device_protocol_list(self, _):
         return JSON(DEVICE_PROTOCOLS)
 
     @param_function(method='GET', url=r'/api/v1/term_protocols')
-    async def get_term_protocol_list(self, request):
+    async def get_term_protocol_list(self, _):
         return JSON(TERM_PROTOCOLS)
 
+    @param_function(method='GET', url=r'/api/v1/formulas')
+    async def get_formula_list(self, _):
+        try:
+            with (await self.redis_pool) as redis_client:
+                formula_list = await redis_client.smembers('SET:FORMULA')
+                return JSON(formula_list)
+        except Exception as e:
+            logger.error('get_formula_list failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='GET', url=r'/api/v1/formulas/{formula_id}')
+    async def get_formula(self, request):
+        try:
+            with (await self.redis_pool) as redis_client:
+                formula = await redis_client.hgetall('HS:FORMULA:{}'.format(request.match_info['formula_id']))
+                if not formula:
+                    return web.Response(status=404, text='formula_id not found!')
+                return JSON(formula)
+        except Exception as e:
+            logger.error('get_formula failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
     @param_function(method='GET', url=r'/api/v1/devices')
-    async def get_device_list(self, request):
+    async def get_device_list(self, _):
         try:
             with (await self.redis_pool) as redis_client:
                 device_list = await redis_client.smembers('SET:DEVICE')
@@ -110,7 +142,7 @@ class APIServer(ParamFunctionContainer):
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='GET', url=r'/api/v1/terms')
-    async def get_term_list(self, request):
+    async def get_term_list(self, _):
         try:
             with (await self.redis_pool) as redis_client:
                 term_list = await redis_client.smembers('SET:TERM')
@@ -133,7 +165,7 @@ class APIServer(ParamFunctionContainer):
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='GET', url=r'/api/v1/items')
-    async def get_item_list(self, request):
+    async def get_item_list(self, _):
         try:
             with (await self.redis_pool) as redis_client:
                 item_list = await redis_client.smembers('SET:ITEM')
@@ -210,7 +242,7 @@ class APIServer(ParamFunctionContainer):
                 device_id = request.match_info['device_id']
                 term_id = request.match_info['term_id']
                 item_id = request.match_info['item_id']
-                data_list = await redis_client.lrange('LST:DATA:{}:{}:{}'.format(device_id, term_id, item_id), 0, -1)
+                data_list = await redis_client.hgetall('HS:DATA:{}:{}:{}'.format(device_id, term_id, item_id))
                 return JSON(data_list)
         except Exception as e:
             logger.error('get_data_list failed: %s', repr(e), exc_info=True)
@@ -224,17 +256,78 @@ class APIServer(ParamFunctionContainer):
                 term_id = request.match_info['term_id']
                 item_id = request.match_info['item_id']
                 index = int(request.match_info['index'])
-                data_list = await redis_client.lindex('LST:DATA:{}:{}:{}'.format(device_id, term_id, item_id), index)
-                return JSON(data_list)
+                idx_key = await redis_client.lindex('LST:DATA_TIME:{}:{}:{}'.format(device_id, term_id, item_id), index)
+                data_val = await redis_client.hget('HS:DATA:{}:{}:{}'.format(device_id, term_id, item_id), idx_key)
+                return JSON({idx_key: data_val})
         except Exception as e:
             logger.error('get_data failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='POST', url=r'/api/v1/formulas')
+    async def create_formula(self, request):
+        try:
+            with (await self.redis_pool) as redis_client:
+                formula_data = await self._read_data(request)
+                formula_dict = json.loads(formula_data)
+                logger.debug('new formula arg=%s', formula_dict)
+                found = await redis_client.exists('HS:FORMULA:{}'.format(formula_dict['id']))
+                if found:
+                    return web.Response(status=409, text='formula already exists!')
+                self.redis_client.hmset('HS:FORMULA:{}'.format(formula_dict['id']), formula_dict)
+                await redis_client.sadd('SET:FORMULA', formula_dict['id'])
+                for idx in range(8):
+                    param_key = 'p{}'.format(idx)
+                    param = formula_dict.get(param_key)
+                    if param:
+                        formula_dict[param_key] = 'HS:DATA:{}'.format(param)
+                        await redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param), formula_dict[param_key])
+                await redis_client.publish('CHANNEL:FORMULA_ADD', json.dumps(formula_dict))
+                return web.Response()
+        except Exception as e:
+            logger.error('create_formula failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='PUT', url=r'/api/v1/formulas/{formula_id}')
+    async def update_formula(self, request):
+        try:
+            with (await self.redis_pool) as redis_client:
+                formula_id = request.match_info['formula_id']
+                old_formula = await redis_client.hgetall('HS:FORMULA:{}'.format(formula_id))
+                if not old_formula:
+                    return web.Response(status=404, text='formula_id not found!')
+                await self.del_formula(request)
+                await self.create_formula(request)
+                return web.Response()
+        except Exception as e:
+            logger.error('update_formula failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='DELETE', url=r'/api/v1/formulas/{formula_id}')
+    async def del_formula(self, request):
+        try:
+            with (await self.redis_pool) as redis_client:
+                formula_id = request.match_info['formula_id']
+                formula_dict = await redis_client.hgetall('HS:FORMULA:{}'.format(formula_id))
+                if not formula_dict:
+                    return web.Response(status=404, text='formula_id not found!')
+                await redis_client.publish('CHANNEL:FORMULA_DEL', json.dumps(formula_id))
+                for idx in range(8):
+                    param_key = 'p{}'.format(idx)
+                    param = formula_dict.get(param_key)
+                    if param:
+                        await redis_client.srem('SET:FORMULA_PARAM:{}'.format(param[8:]), formula_id)
+                await redis_client.delete('HS:FORMULA:{}'.format(formula_id))
+                await redis_client.srem('SET:FORMULA', formula_id)
+                return web.Response()
+        except Exception as e:
+            logger.error('del_formula failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='POST', url=r'/api/v1/devices')
     async def create_device(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                device_data = await request.read()
+                device_data = await self._read_data(request)
                 device_dict = json.loads(device_data)
                 logger.debug('new device arg=%s', device_dict)
                 found = await redis_client.exists('HS:DEVICE:{}'.format(device_dict['id']))
@@ -256,7 +349,7 @@ class APIServer(ParamFunctionContainer):
                 old_device = await redis_client.hgetall('HS:DEVICE:{}'.format(device_id))
                 if not old_device:
                     return web.Response(status=404, text='device_id not found!')
-                device_data = await request.read()
+                device_data = await self._read_data(request)
                 device_dict = json.loads(device_data)
                 if str(device_dict['id']) != device_id:
                     await self.del_device(request)
@@ -292,7 +385,10 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.delete('SET:DEVICE_TERM:{}'.format(device_id))
                 await redis_client.delete('LST:FRAME:{}'.format(device_id))
                 # delete values
-                keys = await self._find_keys(redis_client, 'LST:DATA:{}:*'.format(device_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:{}:*'.format(device_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:{}:*'.format(device_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 # delete mapping
@@ -308,7 +404,7 @@ class APIServer(ParamFunctionContainer):
     async def create_term(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                term_data = await request.read()
+                term_data = await self._read_data(request)
                 term_dict = json.loads(term_data)
                 logger.debug('new term arg=%s', term_dict)
                 found = await redis_client.exists('HS:TERM:{}'.format(term_dict['id']))
@@ -331,7 +427,7 @@ class APIServer(ParamFunctionContainer):
                 old_term = await redis_client.hgetall('HS:TERM:{}'.format(term_id))
                 if not old_term:
                     return web.Response(status=404, text='term_id not found!')
-                term_data = await request.read()
+                term_data = await self._read_data(request)
                 term_dict = json.loads(term_data)
                 if str(term_dict['id']) != term_id:
                     await self.del_term(request)
@@ -341,6 +437,8 @@ class APIServer(ParamFunctionContainer):
                     if term_dict['device_id'] != old_term['device_id']:
                         await redis_client.publish('CHANNEL:TERM_DEL', json.dumps(old_term))
                         await redis_client.publish('CHANNEL:TERM_ADD', term_data)
+                    else:
+                        await redis_client.publish('CHANNEL:TERM_FRESH', term_data)
                 return web.Response()
         except Exception as e:
             logger.error('update_term failed: %s', repr(e), exc_info=True)
@@ -361,7 +459,10 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.srem('SET:DEVICE_TERM:{}'.format(term_info['device_id']), term_id)
                 await redis_client.delete('SET:TERM_ITEM:{}'.format(term_id))
                 # delete all values
-                keys = await self._find_keys(redis_client, 'LST:DATA:*:{}:*'.format(term_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:*:{}:*'.format(term_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:*:{}:*'.format(term_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 # delete from protocols mapping
@@ -382,7 +483,7 @@ class APIServer(ParamFunctionContainer):
     async def create_item(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                item_data = await request.read()
+                item_data = await self._read_data(request)
                 item_dict = json.loads(item_data)
                 logger.debug('new item arg=%s', item_dict)
                 found = await redis_client.exists('HS:ITEM:{}'.format(item_dict['id']))
@@ -403,7 +504,7 @@ class APIServer(ParamFunctionContainer):
                 old_item = await redis_client.hgetall('HS:ITEM:{}'.format(item_id))
                 if not old_item:
                     return web.Response(status=404, text='item_id not found!')
-                item_data = await request.read()
+                item_data = await self._read_data(request)
                 item_dict = json.loads(item_data)
                 if str(item_dict['id']) != item_id:
                     await self.del_item(request)
@@ -429,7 +530,7 @@ class APIServer(ParamFunctionContainer):
                 keys = await self._find_keys(redis_client, 'SET:TERM_ITEM:*')
                 for key in keys:
                     await redis_client.srem(key, item_id)
-                # delete from term->item hash
+                # delete from term->item hash, TODO: publish msg to CHANNEL:TERM_ITEM_DEL
                 keys = await self._find_keys(redis_client, 'HS:TERM_ITEM:*:{}'.format(item_id))
                 if keys:
                     self.redis_client.delete(*keys)
@@ -443,7 +544,10 @@ class APIServer(ParamFunctionContainer):
                 if all_keys:
                     await redis_client.delete(*all_keys)
                 # delete all values
-                keys = await self._find_keys(redis_client, 'LST:DATA:*:*:{}'.format(item_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:*:*:{}'.format(item_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:*:*:{}'.format(item_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 return web.Response()
@@ -455,7 +559,7 @@ class APIServer(ParamFunctionContainer):
     async def create_term_item(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                term_item_data = await request.read()
+                term_item_data = await self._read_data(request)
                 term_item_dict = json.loads(term_item_data)
                 logger.debug('new term_item arg=%s', term_item_dict)
                 term_id = request.match_info['term_id']
@@ -498,7 +602,7 @@ class APIServer(ParamFunctionContainer):
     async def update_term_item(self, request):
         try:
             with (await self.redis_pool) as redis_client:
-                term_item_data = await request.read()
+                term_item_data = await self._read_data(request)
                 term_item_dict = json.loads(term_item_data)
                 term_id = request.match_info['term_id']
                 item_id = request.match_info['item_id']
@@ -532,7 +636,10 @@ class APIServer(ParamFunctionContainer):
                 await redis_client.delete('HS:MAPPING:{}:{}:{}'.format(
                         device_info['protocol'].upper(), device_id, term_item_dict['protocol_code']))
                 # delete all values
-                keys = await self._find_keys(redis_client, 'LST:DATA:*:{}:{}'.format(term_id, item_id))
+                keys = await self._find_keys(redis_client, 'LST:DATA_TIME:*:{}:{}'.format(term_id, item_id))
+                if keys:
+                    self.redis_client.delete(*keys)
+                keys = await self._find_keys(redis_client, 'HS:DATA:*:{}:{}'.format(term_id, item_id))
                 if keys:
                     self.redis_client.delete(*keys)
                 return web.Response()
@@ -546,7 +653,7 @@ class APIServer(ParamFunctionContainer):
         channel_name = None
         try:
             redis_client = await self.redis_pool.acquire()
-            call_data = await request.read()
+            call_data = await self._read_data(request)
             call_data_dict = json.loads(call_data)
             logger.debug('new call_data arg=%s', call_data_dict)
             found = await redis_client.exists('HS:DEVICE:{}'.format(call_data_dict['device_id']))
@@ -572,7 +679,8 @@ class APIServer(ParamFunctionContainer):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('device_call got msg: %s', msg)
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
@@ -585,6 +693,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('device_call failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
                 await redis_client.unsubscribe(channel_name)
+                self.redis_pool.release(redis_client)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='POST', url=r'/api/v1/device_ctrl')
@@ -593,7 +702,7 @@ class APIServer(ParamFunctionContainer):
         channel_name = None
         try:
             redis_client = await self.redis_pool.acquire()
-            ctrl_data = await request.read()
+            ctrl_data = await self._read_data(request)
             ctrl_data_dict = json.loads(ctrl_data)
             logger.debug('new ctrl_data arg=%s', ctrl_data_dict)
             found = await redis_client.exists('HS:DEVICE:{}'.format(ctrl_data_dict['device_id']))
@@ -619,7 +728,8 @@ class APIServer(ParamFunctionContainer):
                 while await ch.wait_message():
                     msg = await ch.get_json()
                     logger.debug('device_ctrl got msg: %s', msg)
-                    cb.set_result(msg)
+                    if not cb.done():
+                        cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
             rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
@@ -632,44 +742,49 @@ class APIServer(ParamFunctionContainer):
             logger.error('device_ctrl failed: %s', repr(e), exc_info=True)
             if redis_client and redis_client.in_pubsub and channel_name:
                 await redis_client.unsubscribe(channel_name)
+                self.redis_pool.release(redis_client)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='POST', url=r'/api/v1/formula_check')
+    async def formula_check(self, request):
+        redis_client = None
+        channel_name = None
+        try:
+            redis_client = await self.redis_pool.acquire()
+            formula_data = await self._read_data(request)
+            formula_dict = json.loads(formula_data)
+            logger.debug('formula_check arg=%s', formula_dict)
+            channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(formula_dict['formula']))
+            res = await redis_client.subscribe(channel_name)
+            cb = asyncio.futures.Future()
+
+            async def reader(ch):
+                while await ch.wait_message():
+                    msg = await ch.get(encoding='utf-8')
+                    if not cb.done():
+                        cb.set_result(msg)
+
+            tsk = asyncio.ensure_future(reader(res[0]))
+            with (await self.redis_pool) as pub_client:
+                await pub_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
+            rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
+            await redis_client.unsubscribe(channel_name)
+            await tsk
+            self.redis_pool.release(redis_client)
+            return web.Response(status=200, text=rst)
+        except Exception as e:
+            logger.exception(e)
+            logger.error('formula_check failed: %s', repr(e), exc_info=True)
+            if redis_client and redis_client.in_pubsub and channel_name:
+                await redis_client.unsubscribe(channel_name)
+                self.redis_pool.release(redis_client)
             return web.Response(status=400, text=repr(e))
 
 
-# class Container(api_hour.Container):
-#     """
-#         run in cmd: api_hour -w 4 api_server:Container
-#     """
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         # Declare HTTP server
-#         self.servers['http'] = web.Application(loop=kwargs['loop'])
-#         self.servers['http'].ah_container = self  # keep a reference in HTTP server to Container
-#         self.api_server = APIServer(io_loop=kwargs['loop'], web_app=self.servers['http'])
-#
-#     def make_servers(self, socket):
-#         # This method is used by api_hour command line to bind your HTTP server on socket
-#         return [self.servers['http'].make_handler(logger=self.worker.log,
-#                                                   keep_alive=self.worker.cfg.keepalive,
-#                                                   access_log=self.worker.log.access_log,
-#                                                   access_log_format=self.worker.cfg.access_log_format)]
-
-
 def run_server(port=8080):
-    # loop = asyncio.get_event_loop()
-    # web_app = web.Application()
     api_server = APIServer(port)
     logger.info('serving on %s', api_server.server.sockets[0].getsockname())
     asyncio.get_event_loop().run_forever()
-    # try:
-    #     loop.run_forever()
-    # except KeyboardInterrupt:
-    #     pass
-    # finally:
-    #     loop.run_until_complete(handler.finish_connections(1.0))
-    #     server.close()
-    #     loop.run_until_complete(server.wait_closed())
-    #     loop.run_until_complete(web_app.finish())
-    # loop.close()
 
 
 if __name__ == '__main__':

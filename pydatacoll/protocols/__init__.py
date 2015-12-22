@@ -33,16 +33,18 @@ class BaseDevice(object, metaclass=ABCMeta):
             with (await self.redis_pool) as redis_client:
                 await redis_client.rpush("LST:FRAME:{}".format(self.device_id),
                                          '{time},{type},{frame}'.format(
-                                                 time=datetime.datetime.now().isoformat(sep=' '),
+                                                 time=datetime.datetime.now().isoformat(),
                                                  type="send" if send is True else "recv", frame=frame.hex()))
         except Exception as e:
             logger.error("device[%s] save_frame failed: %s", self.device_id, repr(e))
 
     # 召测
-    async def call_data(self, term_id, item_id):
+    async def call_data(self, call_dict):
         try:
             if not self.connected:
                 raise Exception('device not connected!')
+            term_id = call_dict['term_id']
+            item_id = call_dict['item_id']
             with (await self.redis_pool) as redis_client:
                 term_item = await redis_client.hgetall('HS:TERM_ITEM:{term_id}:{item_id}'.format(
                         term_id=term_id, item_id=item_id))
@@ -56,10 +58,13 @@ class BaseDevice(object, metaclass=ABCMeta):
             logger.error('device[%s] call_data failed: %s', self.device_id, repr(e))
 
     # 控制
-    async def ctrl_data(self, term_id, item_id, value):
+    async def ctrl_data(self, ctrl_dict):
         try:
             if not self.connected:
                 raise Exception('device not connected!')
+            term_id = ctrl_dict['term_id']
+            item_id = ctrl_dict['item_id']
+            value = ctrl_dict['value']
             with (await self.redis_pool) as redis_client:
                 term_item = await redis_client.hgetall('HS:TERM_ITEM:{term_id}:{item_id}'.format(
                                 term_id=term_id, item_id=item_id))
@@ -103,14 +108,16 @@ class BaseDevice(object, metaclass=ABCMeta):
                         data_value = data_value * float(term_item['coefficient']) + float(term_item['base_val'])
                     json_data = json.dumps({
                         'device_id': self.device_id, 'term_id': term_item['term_id'], 'item_id': term_item['item_id'],
-                        'time': data_time.isoformat(sep=' '), 'value': data_value,
+                        'time': data_time.isoformat(), 'value': data_value,
                     })
                     pub_channel = 'CHANNEL:DEVICE_{}:{}:{}:{}'.format(
                             method.upper(), self.device_id, term_item['term_id'], term_item['item_id'])
                     if method == 'data':
-                        data_key = "LST:DATA:{}:{}:{}".format(
+                        data_key = "{}:{}:{}".format(
                                 self.device_id, term_item['term_id'], term_item['item_id'])
-                        await redis_client.rpush(data_key, json.dumps((data_time.isoformat(sep=' '), data_value)))
+                        time_str = data_time.isoformat()
+                        await redis_client.hset("HS:DATA:{}".format(data_key), time_str, data_value)
+                        await redis_client.rpush("LST:DATA_TIME:{}".format(data_key), time_str)
                         # if check_result != 'OK':
                         #     warn_msg = json.dumps(
                         #         {'warn_msg': check_result, 'device_id': self.device_id, 'term_id': term_item['term_id'],
@@ -122,23 +129,16 @@ class BaseDevice(object, metaclass=ABCMeta):
             logger.exception(e)
 
     @abstractmethod
-    def fresh_task(self, term_id, item_id, delete=False):
-        pass
-
-    @abstractmethod
-    async def run_task(self):
-        """
-        :return:
-        """
-        pass
-
-    @abstractmethod
     async def send_frame(self, frame, check=True):
         """
         :param frame: frame send to remote device
         :param check: directly send or save to send buffer
         :return: None
         """
+        pass
+
+    @abstractmethod
+    def fresh_task(self, term_dict, term_item_dict, delete=False):
         pass
 
     @abstractmethod

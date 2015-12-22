@@ -1,4 +1,6 @@
 Developer's guide
 -----------------
 
-not done yet:(
+.. toctree::
+
+    develop/redis-keys

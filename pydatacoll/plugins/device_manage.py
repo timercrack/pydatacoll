@@ -8,14 +8,14 @@ logger = my_logger.get_logger('DeviceManager')
 
 
 class DeviceManager(BaseModule):
-    device_list = dict()
-    protocol_list = dict()
+    device_dict = dict()
+    protocol_dict = dict()
 
     async def start(self):
         try:
             with (await self.redis_pool) as redis_client:
-                device_list = await redis_client.smembers('SET:DEVICE')
-                for device_id in device_list:
+                device_dict = await redis_client.smembers('SET:DEVICE')
+                for device_id in device_dict:
                     device_dict = await redis_client.hgetall('HS:DEVICE:{}'.format(device_id))
                     if device_dict:
                         await self.add_device(None, device_dict)
@@ -25,94 +25,86 @@ class DeviceManager(BaseModule):
     async def stop(self):
         await self.del_device()
 
-    @param_function(channel='CHANNEL:DEVICE_DEL')
-    async def del_device(self, _, device_id=None):
-        try:
-            if device_id is None:
-                for device in self.device_list.values():
-                    device.disconnect()
-                self.device_list.clear()
-                return
-
-            if device_id in self.device_list:
-                device = self.device_list.pop(device_id)
-                device.disconnect()
-        except Exception as ee:
-            logger.error('del_device failed: %s', repr(ee), exc_info=True)
-
-    @param_function(channel='CHANNEL:DEVICE_ADD')
-    async def add_device(self, _, device_dict):
-        await self.fresh_device(_, device_dict)
-
     @param_function(channel='CHANNEL:DEVICE_FRESH')
     async def fresh_device(self, _, device_dict):
         try:
             device_id = str(device_dict['id'])
-            device = self.device_list.get(device_id)
+            device = self.device_dict.get(device_id)
             if device is not None:
                 if str(device.info['id']) != str(device_dict['id']) or \
                                 device.info['protocol'] != device_dict['protocol'] or \
                                 device.info['ip'] != device_dict['ip'] or \
                                 str(device.info['port']) != str(device_dict['port']):
-                    await self.device_list.pop(device_id).disconnect()
+                    await self.device_dict.pop(device_id).disconnect()
                 else:
                     return
             protocol = device_dict['protocol']
-            protocol_class = self.protocol_list.get(protocol)
+            protocol_class = self.protocol_dict.get(protocol)
             if protocol_class is None:
                 importlib.invalidate_caches()
                 module = importlib.import_module('pydatacoll.protocols.{}.device'.format(protocol))
-                protocol_class = self.protocol_list[protocol] = getattr(module, '{}Device'.format(protocol.upper()))
+                protocol_class = self.protocol_dict[protocol] = getattr(module, '{}Device'.format(protocol.upper()))
                 logger.info('fresh_device new protocol %s registered', protocol_class.__name__)
-            self.device_list[device_id] = protocol_class(device_dict, self.io_loop, self.redis_pool)
+            self.device_dict[device_id] = protocol_class(device_dict, self.io_loop, self.redis_pool)
         except Exception as ee:
             logger.error('fresh_device failed: %s', repr(ee), exc_info=True)
 
+    @param_function(channel='CHANNEL:DEVICE_ADD')
+    async def add_device(self, _, device_dict):
+        await self.fresh_device(_, device_dict)
+
+    @param_function(channel='CHANNEL:DEVICE_DEL')
+    async def del_device(self, _, device_id=None):
+        try:
+            if device_id is None:
+                for device in self.device_dict.values():
+                    device.disconnect()
+                self.device_dict.clear()
+                return
+
+            if device_id in self.device_dict:
+                device = self.device_dict.pop(device_id)
+                device.disconnect()
+        except Exception as ee:
+            logger.error('del_device failed: %s', repr(ee), exc_info=True)
+
     @param_function(channel='CHANNEL:TERM_ADD')
     async def add_term(self, _, term_dict):
-        device = self.device_list.get(term_dict['device_id'])
-        logger.debug('add_term device_id=%s, term_id=%s', term_dict['device_id'], term_dict['id'])
+        device = self.device_dict.get(term_dict['device_id'])
         if device is not None:
-            device.fresh_task(term_id=term_dict['id'])
+            device.fresh_task(term_dict=term_dict, term_item_dict=None, delete=False)
 
     @param_function(channel='CHANNEL:TERM_DEL')
     async def del_term(self, _, term_dict):
-        device = self.device_list.get(term_dict['device_id'])
+        device = self.device_dict.get(term_dict['device_id'])
         if device is not None:
-            device.fresh_task(term_id=term_dict['term_id'], item_id=None, delete=True)
+            device.fresh_task(term_dict=term_dict, term_item_dict=None, delete=True)
 
     @param_function(channel='CHANNEL:TERM_ITEM_ADD')
     async def add_term_item(self, _, term_item_dict):
-        device = self.device_list.get(term_item_dict['device_id'])
+        device = self.device_dict.get(term_item_dict['device_id'])
         if device is not None:
-            device.fresh_task(term_id=term_item_dict['term_id'], item_id=term_item_dict['item_id'])
+            device.fresh_task(term_dict=None, term_item_dict=term_item_dict, delete=False)
 
     @param_function(channel='CHANNEL:TERM_ITEM_DEL')
     async def del_term_item(self, _, term_item_dict):
-        device = self.device_list.get(term_item_dict['device_id'])
+        device = self.device_dict.get(term_item_dict['device_id'])
         if device is not None:
-            device.fresh_task(term_id=term_item_dict['term_id'], item_id=term_item_dict['item_id'], delete=True)
+            device.fresh_task(term_dict=None, term_item_dict=term_item_dict, delete=True)
 
     @param_function(channel='CHANNEL:DEVICE_CALL')
     async def device_call(self, _, call_dict):
         try:
-            device_id = call_dict['device_id']
-            term_id = call_dict['term_id']
-            item_id = call_dict['item_id']
-            device = self.device_list.get(device_id)
-            await device.call_data(term_id, item_id)
+            device = self.device_dict.get(call_dict['device_id'])
+            await device.call_data(call_dict)
         except Exception as ee:
             logger.error('device_call failed: %s', repr(ee), exc_info=True)
 
     @param_function(channel='CHANNEL:DEVICE_CTRL')
     async def device_ctrl(self, _, ctrl_dict):
         try:
-            device_id = ctrl_dict['device_id']
-            term_id = ctrl_dict['term_id']
-            item_id = ctrl_dict['item_id']
-            value = ctrl_dict['value']
-            device = self.device_list.get(device_id)
-            await device.ctrl_data(term_id, item_id, value)
+            device = self.device_dict.get(ctrl_dict['device_id'])
+            await device.ctrl_data(ctrl_dict)
         except Exception as ee:
             logger.error('device_ctrl failed: %s', repr(ee), exc_info=True)
 
