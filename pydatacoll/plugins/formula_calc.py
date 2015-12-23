@@ -118,16 +118,24 @@ class FormulaCalc(BaseModule):
             logger.debug("calculate formula=%s, value=%s, type(value)=%s",
                          self.formula_dict[formula_id]['formula'], value, type(value))
             if isinstance(value, Number):
+                time_str = datetime.datetime.now().isoformat()
                 value = float(value)
-                with (await self.redis_pool) as redis_client:
-                    data_key = "{}:{}:{}".format(formula['device_id'], formula['term_id'], formula['item_id'])
-                    time_str = datetime.datetime.now().isoformat()
-                    await redis_client.hset("HS:DATA:{}".format(data_key), time_str, value)
-                    await redis_client.rpush("LST:DATA_TIME:{}".format(data_key), time_str)
-                    await redis_client.publish("CHANNEL:DEVICE_DATA:{}".format(data_key), json.dumps({
-                        'device_id': formula['device_id'], 'term_id': formula['term_id'],
-                        'item_id': formula['item_id'], 'time': time_str, 'value': value,
-                    }))
+            elif isinstance(value, pd.Series):
+                time_str = value.index[0].isoformat()
+                value = float(value[0])
+            else:
+                return
+            with (await self.redis_pool) as redis_client:
+                data_key = "{}:{}:{}".format(formula['device_id'], formula['term_id'], formula['item_id'])
+                last_value = await redis_client.hget('HS:DATA:{}'.format(data_key), time_str)
+                if last_value and math.isclose(value, float(last_value), rel_tol=1e-04):
+                    logger.debug("calculate value=%s,last_value=%s not change, ignored", value, last_value)
+                    return
+                await redis_client.hset("HS:DATA:{}".format(data_key), time_str, value)
+                await redis_client.rpush("LST:DATA_TIME:{}".format(data_key), time_str)
+                await redis_client.publish("CHANNEL:DEVICE_DATA:{}".format(data_key), json.dumps({
+                    'device_id': formula['device_id'], 'term_id': formula['term_id'],
+                    'item_id': formula['item_id'], 'time': time_str, 'value': value}))
         except Exception as ee:
             logger.error('calc failed: %s', repr(ee), exc_info=True)
 
@@ -157,8 +165,8 @@ class FormulaCalc(BaseModule):
             value = interp(check_dict['formula'])
             if len(interp.error) > 0:
                 rst = output.getvalue()
-            elif not isinstance(value, Number):
-                rst = "result type must be Number!"
+            elif not isinstance(value, Number) and not isinstance(value, pd.Series):
+                rst = "result type must be Number or Series!"
 
         except Exception as ee:
             logger.error('do_check failed: %s', repr(ee), exc_info=True)
