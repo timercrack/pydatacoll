@@ -27,8 +27,8 @@ test_term_item = {'id': '9', 'term_id': '20', 'item_id': '2000', 'protocol_code'
                   'base_val': '0', 'coefficient': '1'}
 
 formula1 = {'id': '1', 'formula': 'max(p1[-1], p2[-1])', 'device_id': '3', 'term_id': '40', 'item_id': '1000',
-            'p1': 'HS:DATA:1:10:1000',
-            'p2': 'HS:DATA:2:30:1000'}
+            'p1': '1:10:1000',
+            'p2': '2:30:1000'}
 formula_list = [formula1]
 device1 = {'id': '1', 'name': '测试集中器1', 'ip': '127.0.0.1', 'port': '2404', 'status': 'on',
            'identify': '111', 'protocol': 'iec104'}

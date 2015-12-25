@@ -275,13 +275,10 @@ class APIServer(ParamFunctionContainer):
                     return web.Response(status=409, text='formula already exists!')
                 self.redis_client.hmset('HS:FORMULA:{}'.format(formula_dict['id']), formula_dict)
                 await redis_client.sadd('SET:FORMULA', formula_dict['id'])
-                for idx in range(8):
-                    param_key = 'p{}'.format(idx)
-                    param = formula_dict.get(param_key)
-                    if param:
-                        formula_dict[param_key] = 'HS:DATA:{}'.format(param)
-                        await redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param), formula_dict[param_key])
-                await redis_client.publish('CHANNEL:FORMULA_ADD', json.dumps(formula_dict))
+                for param, param_value in formula_dict.items():
+                    if param.startswith('p'):
+                        await redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param_value), formula_dict['id'])
+                await redis_client.publish('CHANNEL:FORMULA_ADD', formula_data)
                 return web.Response()
         except Exception as e:
             logger.error('create_formula failed: %s', repr(e), exc_info=True)
@@ -311,11 +308,9 @@ class APIServer(ParamFunctionContainer):
                 if not formula_dict:
                     return web.Response(status=404, text='formula_id not found!')
                 await redis_client.publish('CHANNEL:FORMULA_DEL', json.dumps(formula_id))
-                for idx in range(8):
-                    param_key = 'p{}'.format(idx)
-                    param = formula_dict.get(param_key)
-                    if param:
-                        await redis_client.srem('SET:FORMULA_PARAM:{}'.format(param[8:]), formula_id)
+                for param, param_value in formula_dict.items():
+                    if param.startswith('p'):
+                        await redis_client.srem('SET:FORMULA_PARAM:{}'.format(param_value), formula_id)
                 await redis_client.delete('HS:FORMULA:{}'.format(formula_id))
                 await redis_client.srem('SET:FORMULA', formula_id)
                 return web.Response()
