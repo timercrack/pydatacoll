@@ -1,6 +1,10 @@
 PyDataColl
 ==========
 
+.. image:: https://badges.gitter.im/timercrack/pydatacoll.svg
+   :alt: Join the chat at https://gitter.im/timercrack/pydatacoll
+   :target: https://gitter.im/timercrack/pydatacoll?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+
 PyDataColl is a `SCADA <Ahttps://en.wikipedia.org/wiki/SCADA>`_-like system which use Python as the main language. It
 originally inspired by an old program I made as for a core part of a large
 `EMS <https://en.wikipedia.org/wiki/Energy_management_system>`_ when I worked as an engineer at GDT(A
