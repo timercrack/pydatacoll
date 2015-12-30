@@ -41,6 +41,8 @@ REDIS_KEY = {
             'base_val': '基值',
             'coefficient': '系数',
             'db_save_sql': '数据库存储SQL',
+            'up_limit': '上限(模拟时用于生成随机数的上限)',
+            'down_limit': '下限(模拟时用于生成随机数的下限)',
         },
         "HS:MAPPING:{protocol_name}:{device_id}:{protocol_code}": {
             '同上',

@@ -48,10 +48,10 @@ item1000 = {'id': '1000', 'name': 'A相电压', 'view_code': '1000', 'func_type'
 item2000 = {'id': '2000', 'name': '继电器开关', 'view_code': '2000', 'func_type': '遥控量'}
 item_list = [item1000, item2000]
 term10_item1000 = {'id': '1', 'term_id': '10', 'item_id': '1000', 'protocol_code': '100', 'code_type': '36',
-                   'base_val': '0', 'coefficient': '1'}
+                   'base_val': '0', 'coefficient': '1', 'down_limit': '220', 'up_limit': '230'}
 term10_item2000 = {'id': '2', 'term_id': '10', 'item_id': '2000', 'protocol_code': '200', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
-term20_item1000 = {'id': '3', 'term_id': '20', 'item_id': '1000', 'protocol_code': '100', 'code_type': '63',
+term20_item1000 = {'id': '3', 'term_id': '20', 'item_id': '1000', 'protocol_code': '300', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
 term30_item1000 = {'id': '4', 'term_id': '30', 'item_id': '1000', 'protocol_code': '100', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
@@ -59,24 +59,24 @@ term40_item1000 = {'id': '5', 'term_id': '40', 'item_id': '1000',
                    'base_val': '0', 'coefficient': '1'}
 term_item_list = [term10_item1000, term10_item2000, term20_item1000, term30_item1000, term40_item1000]
 device1_term10_item1000 = {
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 1).isoformat(): '100',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 2).isoformat(): '101',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 3).isoformat(): '102',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 1).isoformat(): '100.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 2).isoformat(): '101.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 3).isoformat(): '102.0',
 }
 device1_term10_item2000 = {
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 4).isoformat(): '1',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 5).isoformat(): '0',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 6).isoformat(): '1',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 4).isoformat(): '1.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 5).isoformat(): '0.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 6).isoformat(): '1.0',
 }
 device1_term20_item1000 = {
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 7).isoformat(): '100',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 8).isoformat(): '101',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 9).isoformat(): '102',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 7).isoformat(): '100.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 8).isoformat(): '101.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 9).isoformat(): '102.0',
 }
 device2_term30_item1000 = {
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 9): '100',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 10): '101',
-    datetime.datetime(2015, 12, 1, 8, 50, 15, 11): '102',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 9): '100.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 10): '101.0',
+    datetime.datetime(2015, 12, 1, 8, 50, 15, 11): '102.0',
 }
 
 
