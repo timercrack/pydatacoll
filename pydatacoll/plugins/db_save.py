@@ -47,8 +47,6 @@ class DBSaver(BaseModule):
                             param.device_id, param.term_id, param.item_id), last_key)
                     if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                         conn = await self.mysql_pool.acquire()
-                        # print('conn=', conn)
-                        # with (await self.mysql_pool) as conn:
                         cur = await conn.cursor()
                         save_sql = term_item['db_save_sql'].format(PARAM=param)
                         logger.debug('save_mysql: saving data, sql=%s', save_sql)

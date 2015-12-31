@@ -9,12 +9,12 @@ log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
 level = logging.DEBUG
 file_log = None  # File name
 console_log = True
-# sys_str = platform.system()
-# if sys_str == "Windows":
-#     file_log = u"d:\pydatacoll.log"
-# elif sys_str == "Linux":
-#     file_log = u"/var/log/pydatacoll.log"
-#     console_log = False
+sys_str = platform.system()
+if sys_str == "Windows":
+    file_log = u"d:\pydatacoll.log"
+elif sys_str == "Linux":
+    file_log = u"/var/log/pydatacoll.log"
+    console_log = False
 
 
 def init_handler(handler):

@@ -13,7 +13,7 @@ class IEC104Device(BaseDevice):
     def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop,
                  redis_pool: aioredis.RedisPool):
         super(IEC104Device, self).__init__(device_info, io_loop, redis_pool)
-        self.coll_interval = datetime.timedelta(minutes=15)
+        self.coll_interval = datetime.timedelta(minutes=1)
         self.ssn = 0
         self.rsn = 0
         self.k = 0
@@ -28,6 +28,8 @@ class IEC104Device(BaseDevice):
         self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
         self.task_handler = None
         self.receive_handler = None
+        self.start_act_handler = None
+        self.test_act_handler = None
 
     async def reconnect(self):
         try:
@@ -69,6 +71,8 @@ class IEC104Device(BaseDevice):
         self.k = 0
         self.w = 0
         self.send_list.clear()
+        self.start_act_handler = None
+        self.test_act_handler = None
 
     def inc_ssn(self):
         self.ssn = self.ssn + 1 if self.ssn < 32767 else 0
@@ -96,7 +100,7 @@ class IEC104Device(BaseDevice):
     #         self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
 
     def on_timer1(self):
-        logger.debug('device[%s] T1 timeout', self.device_id)
+        logger.error('device[%s] T1 timeout, reconnect...', self.device_id)
         if self.reconnect_handler is None:
             self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
 
@@ -106,7 +110,7 @@ class IEC104Device(BaseDevice):
 
     def on_timer3(self):
         logger.debug('device[%s] T3 timeout, send heartbeat', self.device_id)
-        self.io_loop.create_task(self.send_frame(iec_104.init_frame(UFrame.TESTFR_ACT)))
+        self.test_act_handler = self.io_loop.create_task(self.send_frame(iec_104.init_frame(UFrame.TESTFR_ACT)))
 
     async def receive(self):
         try:
@@ -166,6 +170,10 @@ class IEC104Device(BaseDevice):
                     logger.info('device[%s] remote side send STARTDT_ACT too, ignored mine', self.device_id)
                     self.send_list.popleft()
                     self.stop_timer(IECParam.T1)
+                elif self.start_act_handler:
+                    self.stop_timer(IECParam.T1)
+                    self.start_act_handler.cancel()
+                    self.start_act_handler = None
                 await self.send_frame(iec_104.init_frame(UFrame.STARTDT_CON))
                 self.io_loop.create_task(self.run_task())
                 self.io_loop.create_task(self.check_to_send(frame))
@@ -178,6 +186,10 @@ class IEC104Device(BaseDevice):
                     logger.info('device[%s] remote side send TESTFR_ACT too, ignored mine', self.device_id)
                     self.send_list.popleft()
                     self.stop_timer(IECParam.T1)
+                elif self.test_act_handler:
+                    self.stop_timer(IECParam.T1)
+                    self.test_act_handler.cancel()
+                    self.test_act_handler = None
                 await self.send_frame(iec_104.init_frame(UFrame.TESTFR_CON))
             elif frame.APCI1 == UFrame.TESTFR_CON:
                 self.io_loop.create_task(self.check_to_send(frame))
@@ -265,8 +277,12 @@ class IEC104Device(BaseDevice):
                     self.writer.write(encode_frame)
                     await self.writer.drain()
                     stream_write = True
-                    if frame.APCI1 in (UFrame.STARTDT_ACT, UFrame.TESTFR_ACT):
+                    if frame.APCI1 == UFrame.STARTDT_ACT:
                         self.start_timer(IECParam.T1)
+                        self.start_act_handler = None
+                    elif frame.APCI1 == UFrame.TESTFR_ACT:
+                        self.start_timer(IECParam.T1)
+                        self.test_act_handler = None
                 if check and frame.APCI1 in (
                         UFrame.STARTDT_ACT, UFrame.TESTFR_ACT):
                     self.send_list.append(frame)
