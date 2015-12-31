@@ -337,21 +337,29 @@ class IEC104Device(BaseDevice):
             self.disconnect(reconnect=True)
 
     async def run_task(self):
-        now = datetime.datetime.now()
-        self.last_call_all_time_end = self.last_call_all_time_end or now
-        if self.last_call_all_time_end + self.coll_interval <= now:
-            self.last_call_all_time_begin = now
-            # 103 时钟同步命令
+        try:
+            # now = datetime.datetime.now()
+            # self.last_call_all_time_end = self.last_call_all_time_end or now
+            # logger.info('device[%s] run_task last_call_time=%s', self.device_id, self.last_call_all_time_end)
+            # if self.last_call_all_time_end + self.coll_interval <= now:
+            #     self.last_call_all_time_begin = now
+            #     # 103 时钟同步命令
+            #     await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CS_NA_1, Cause.act))
+            #     # 100 总召唤
+            #     await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_IC_NA_1, Cause.act))
+            #     # 101 电能量召唤
+            #     await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CI_NA_1, Cause.act))
             await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CS_NA_1, Cause.act))
-            # 100 总召唤
             await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_IC_NA_1, Cause.act))
-            # 101 电能量召唤
             await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CI_NA_1, Cause.act))
-        if self.task_handler:
-            self.task_handler.cancel()
-        time_delta = self.last_call_all_time_end + self.coll_interval - now
-        self.task_handler = self.io_loop.call_later(
-                time_delta.seconds, lambda: self.io_loop.create_task(self.run_task()))
+            if self.task_handler:
+                self.task_handler.cancel()
+            # time_delta = self.last_call_all_time_end + self.coll_interval - now
+            self.task_handler = self.io_loop.call_later(
+                    self.coll_interval.seconds, lambda: self.io_loop.create_task(self.run_task()))
+            logger.info('device[%s] run_task next task after %s seconds', self.device_id, self.coll_interval.seconds)
+        except Exception as e:
+            logger.error("device[%s] run_task failed: %s", self.device_id, repr(e), exc_info=True)
 
     def fresh_task(self, term_dict, term_item_dict, delete=False):
         pass

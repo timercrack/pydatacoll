@@ -1,5 +1,7 @@
+import argparse
 import pkgutil
 from collections import defaultdict
+
 try:
     import ujson as json
 except ImportError:
@@ -776,8 +778,11 @@ class APIServer(ParamFunctionContainer):
             return web.Response(status=400, text=repr(e))
 
 
-def run_server(port=8080):
-    api_server = APIServer(port)
+def run_server():
+    parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
+    parser.add_argument('-p', '--port', type=int, default=8080, help='http listening port, default: 8080')
+    args = parser.parse_args()
+    api_server = APIServer(args.port)
     logger.info('serving on %s', api_server.server.sockets[0].getsockname())
     asyncio.get_event_loop().run_forever()
 

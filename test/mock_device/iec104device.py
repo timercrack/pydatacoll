@@ -283,6 +283,7 @@ class IEC104Device(asyncio.Protocol):
 
     def generate_call_all_data(self):
         try:
+            logger.info('device[%s] generate task data...', self.device_id)
             cursor = None
             all_keys = set()
             while cursor != 0:
