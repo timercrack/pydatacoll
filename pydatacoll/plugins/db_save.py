@@ -21,6 +21,7 @@ PLUGIN_PARAM = dict(
 
 class DBSaver(BaseModule):
     mysql_pool = None
+    not_implemented = True
 
     async def start(self):
         self.mysql_pool = await aiomysql.create_pool(**PLUGIN_PARAM)

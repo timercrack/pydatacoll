@@ -175,10 +175,12 @@ class IEC104Device(BaseDevice):
                     self.start_act_handler.cancel()
                     self.start_act_handler = None
                 await self.send_frame(iec_104.init_frame(UFrame.STARTDT_CON))
-                self.io_loop.create_task(self.run_task())
+                self.task_handler = self.io_loop.call_later(
+                    self.coll_interval.seconds, lambda: self.io_loop.create_task(self.run_task()))
                 self.io_loop.create_task(self.check_to_send(frame))
             elif frame.APCI1 == UFrame.STARTDT_CON:
-                self.io_loop.create_task(self.run_task())
+                self.task_handler = self.io_loop.call_later(
+                    self.coll_interval.seconds, lambda: self.io_loop.create_task(self.run_task()))
                 self.io_loop.create_task(self.check_to_send(frame))
             elif frame.APCI1 == UFrame.TESTFR_ACT:
                 # 对方也发送了TESTFR_ACT, 删除之前自己发送的TESTFR_ACT

@@ -43,8 +43,8 @@ class APIServer(ParamFunctionContainer):
         self._load_plugins()
 
     def _add_router(self):
-        for fun_name, args in self.module_arg_dict.items():
-            self.web_app.router.add_route(args['method'], args['url'], getattr(self, fun_name), name=fun_name)
+        for fun_name, fun_args in self.module_arg_dict.items():
+            self.web_app.router.add_route(fun_args['method'], fun_args['url'], getattr(self, fun_name), name=fun_name)
 
     def _load_plugins(self):
         try:
@@ -52,7 +52,7 @@ class APIServer(ParamFunctionContainer):
                 loader.find_module(module_name).load_module(module_name)
             for plugin_class in plugins.BaseModule.__subclasses__():
                 if not hasattr(plugin_class, 'not_implemented'):
-                    plugin = plugin_class()
+                    plugin = plugin_class(self.io_loop, self.redis_pool)
                     self.io_loop.create_task(plugin.install())
         except Exception as e:
             logger.error("_load_plugins failed: %s", repr(e), exc_info=True)
@@ -778,14 +778,14 @@ class APIServer(ParamFunctionContainer):
             return web.Response(status=400, text=repr(e))
 
 
-def run_server():
-    parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
-    parser.add_argument('-p', '--port', type=int, default=8080, help='http listening port, default: 8080')
-    args = parser.parse_args()
-    api_server = APIServer(args.port)
+def run_server(port=8080):
+    api_server = APIServer(port)
     logger.info('serving on %s', api_server.server.sockets[0].getsockname())
     asyncio.get_event_loop().run_forever()
 
 
 if __name__ == '__main__':
-    run_server()
+    parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
+    parser.add_argument('-p', '--port', type=int, default=8080, help='http listening port, default: 8080')
+    args = parser.parse_args()
+    run_server(args.port)

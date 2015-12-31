@@ -14,12 +14,10 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
                  redis_pool: aioredis.RedisPool = None):
         super().__init__()
         self.io_loop = io_loop or asyncio.get_event_loop()
-        self.redis_pool = redis_pool
-        self._redis_pool = self.redis_pool
-        if self.redis_pool is None:
-            self.redis_pool = self._redis_pool = self.io_loop.run_until_complete(
-                    functools.partial(
-                            aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
+        self._redis_pool = redis_pool
+        self.redis_pool = redis_pool or self.io_loop.run_until_complete(
+                functools.partial(
+                        aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=20, encoding='utf-8')())
         self.initialized = False
         self.sub_client = None
         self.sub_channels = list()
@@ -50,7 +48,8 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
             await self.stop()
             await self.sub_client.punsubscribe(*[a['channel'] for a in self.module_arg_dict.values()])
             self.redis_pool.release(self.sub_client)
-            await self._redis_pool.clear()
+            if self._redis_pool is None:  # release the pool created by self
+                await self.redis_pool.clear()
             self.initialized = False
             logger.info('plugin %s uninstalled', type(self).__name__)
         except Exception as e:
