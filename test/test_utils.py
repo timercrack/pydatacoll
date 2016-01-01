@@ -1,6 +1,8 @@
 import unittest
-
+import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
+
+logger = my_logger.get_logger('UtilTest')
 
 
 class UtilTest(unittest.TestCase):
@@ -15,11 +17,11 @@ class UtilTest(unittest.TestCase):
 
             @param_function(method='GET', url='/devices')
             def api_device_list(self, request):
-                print(request)
+                logger.debug('api_device_list req=%s', request)
 
             @param_function(method='POST', url='/devices_new')
             def api_new_device(self, request):
-                print(request)
+                logger.debug('api_new_device req=%s', request)
 
         api = MyAPI(1, 2, 3)
         self.assertDictEqual(api.module_arg_dict, {'api_device_list': {'method': 'GET', 'url': '/devices'},

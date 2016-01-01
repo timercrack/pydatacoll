@@ -1,5 +1,7 @@
+import argparse
 import pkgutil
 from collections import defaultdict
+
 try:
     import ujson as json
 except ImportError:
@@ -41,8 +43,8 @@ class APIServer(ParamFunctionContainer):
         self._load_plugins()
 
     def _add_router(self):
-        for fun_name, args in self.module_arg_dict.items():
-            self.web_app.router.add_route(args['method'], args['url'], getattr(self, fun_name), name=fun_name)
+        for fun_name, fun_args in self.module_arg_dict.items():
+            self.web_app.router.add_route(fun_args['method'], fun_args['url'], getattr(self, fun_name), name=fun_name)
 
     def _load_plugins(self):
         try:
@@ -50,7 +52,7 @@ class APIServer(ParamFunctionContainer):
                 loader.find_module(module_name).load_module(module_name)
             for plugin_class in plugins.BaseModule.__subclasses__():
                 if not hasattr(plugin_class, 'not_implemented'):
-                    plugin = plugin_class()
+                    plugin = plugin_class(self.io_loop, self.redis_pool)
                     self.io_loop.create_task(plugin.install())
         except Exception as e:
             logger.error("_load_plugins failed: %s", repr(e), exc_info=True)
@@ -275,13 +277,10 @@ class APIServer(ParamFunctionContainer):
                     return web.Response(status=409, text='formula already exists!')
                 self.redis_client.hmset('HS:FORMULA:{}'.format(formula_dict['id']), formula_dict)
                 await redis_client.sadd('SET:FORMULA', formula_dict['id'])
-                for idx in range(8):
-                    param_key = 'p{}'.format(idx)
-                    param = formula_dict.get(param_key)
-                    if param:
-                        formula_dict[param_key] = 'HS:DATA:{}'.format(param)
-                        await redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param), formula_dict[param_key])
-                await redis_client.publish('CHANNEL:FORMULA_ADD', json.dumps(formula_dict))
+                for param, param_value in formula_dict.items():
+                    if param.startswith('p'):
+                        await redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param_value), formula_dict['id'])
+                await redis_client.publish('CHANNEL:FORMULA_ADD', formula_data)
                 return web.Response()
         except Exception as e:
             logger.error('create_formula failed: %s', repr(e), exc_info=True)
@@ -311,11 +310,9 @@ class APIServer(ParamFunctionContainer):
                 if not formula_dict:
                     return web.Response(status=404, text='formula_id not found!')
                 await redis_client.publish('CHANNEL:FORMULA_DEL', json.dumps(formula_id))
-                for idx in range(8):
-                    param_key = 'p{}'.format(idx)
-                    param = formula_dict.get(param_key)
-                    if param:
-                        await redis_client.srem('SET:FORMULA_PARAM:{}'.format(param[8:]), formula_id)
+                for param, param_value in formula_dict.items():
+                    if param.startswith('p'):
+                        await redis_client.srem('SET:FORMULA_PARAM:{}'.format(param_value), formula_id)
                 await redis_client.delete('HS:FORMULA:{}'.format(formula_id))
                 await redis_client.srem('SET:FORMULA', formula_id)
                 return web.Response()
@@ -788,4 +785,7 @@ def run_server(port=8080):
 
 
 if __name__ == '__main__':
-    run_server()
+    parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
+    parser.add_argument('-p', '--port', type=int, default=8080, help='http listening port, default: 8080')
+    args = parser.parse_args()
+    run_server(args.port)

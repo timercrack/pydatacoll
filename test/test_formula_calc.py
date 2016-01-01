@@ -64,8 +64,8 @@ class FormulaCalcTest(asynctest.TestCase):
         # 统计06年1月份的累计值
         formula_dict = {
             'id': '2', 'device_id': '3', 'term_id': '40', 'item_id': '1000',
-            'formula': "p1.resample('M', how='sum')['2016-01'][0]",
-            'p1': 'HS:DATA:9:90:9000'}
+            'formula': "p1.resample('M', how='sum')['2016-01']",
+            'p1': '9:90:9000'}
         self.redis_client.hmset('HS:FORMULA:2', formula_dict)
 
         rng = pd.date_range('1/1/2016', periods=1000, freq='H')

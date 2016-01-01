@@ -327,7 +327,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas/-1') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102'})
+            self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102.0'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99/terms/99/items/99/datas') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -400,7 +400,7 @@ name 'p2' is not defined
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/device_call', data=json.dumps(call_dict)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertEqual(rst['value'], 123)
+            self.assertAlmostEqual(rst['value'], 102, delta=0.0001)
 
     async def test_device_ctrl(self):
         ctrl_dict = {'device_id': '2', 'term_id': '30', 'item_id': '1000', 'value': 123.4}
