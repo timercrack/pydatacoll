@@ -7,6 +7,10 @@ PyDataColl
 .. image:: https://coveralls.io/repos/timercrack/pyalgotrade/badge.svg?branch=master&service=github
     :target: https://coveralls.io/github/timercrack/pyalgotrade?branch=master
 
+.. image:: https://readthedocs.org/projects/pydatacoll/badge/?version=latest
+    :target: http://pydatacoll.readthedocs.org/en/latest/?badge=latest
+    :alt: Documentation Status
+
 .. image:: https://badges.gitter.im/timercrack/pydatacoll.svg
     :alt: Join the chat at https://gitter.im/timercrack/pydatacoll
     :target: https://gitter.im/timercrack/pydatacoll?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
