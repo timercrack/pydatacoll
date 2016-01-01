@@ -1,20 +1,20 @@
 import logging
 import threading
-import platform
+# import platform
 
 initLock = threading.Lock()
 rootLoggerInitialized = False
 
 log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
 level = logging.ERROR
-file_log = None  # File name
+file_log = "pydatacoll.log"  # File name
 console_log = True
-sys_str = platform.system()
-if sys_str == "Windows":
-    file_log = "pydatacoll.log"
-elif sys_str == "Linux":
-    file_log = "pydatacoll.log"
-    console_log = False
+# sys_str = platform.system()
+# if sys_str == "Windows":
+#     file_log = "pydatacoll.log"
+# elif sys_str == "Linux":
+#     file_log = "pydatacoll.log"
+#     console_log = False
 
 
 def init_handler(handler):

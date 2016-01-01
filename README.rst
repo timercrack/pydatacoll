@@ -4,8 +4,8 @@ PyDataColl
 .. image:: https://travis-ci.org/timercrack/pydatacoll.svg
     :target: https://travis-ci.org/timercrack/pydatacoll?branch=master
 
-.. image:: https://coveralls.io/repos/timercrack/pyalgotrade/badge.svg?branch=master&service=github
-    :target: https://coveralls.io/github/timercrack/pyalgotrade?branch=master
+.. image:: https://coveralls.io/repos/timercrack/pydatacoll/badge.svg?branch=master&service=github
+    :target: https://coveralls.io/github/timercrack/pydatacoll?branch=master
 
 .. image:: https://readthedocs.org/projects/pydatacoll/badge/?version=latest
     :target: http://pydatacoll.readthedocs.org/en/latest/?badge=latest
