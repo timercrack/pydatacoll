@@ -1,0 +1,22 @@
+language: python
+
+python:
+  - "3.5"
+
+services:
+  - redis  # start redis
+  - mysql  # start mysql
+
+before_install:
+  - mysql -e "create database IF NOT EXISTS test;" -uroot
+  - mysql -e "CREATE USER 'pydatacoll'@'localhost' IDENTIFIED BY 'pydatacoll';" -uroot
+  - mysql -e "GRANT ALL PRIVILEGES ON test.* TO 'pydatacoll'@'localhost';" -uroot
+
+ install:
+  - pip install coveralls
+
+script:
+  - coverage run --source pydatacoll -m unittest
+
+after_success:
+  - coveralls

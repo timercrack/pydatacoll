@@ -23,7 +23,7 @@ class DeviceManager(BaseModule):
             logger.error('init_devices failed: %s', repr(ee), exc_info=True)
 
     async def stop(self):
-        await self.del_device()
+        await self.del_device(None)
 
     @param_function(channel='CHANNEL:DEVICE_FRESH')
     async def fresh_device(self, _, device_dict):
@@ -44,7 +44,7 @@ class DeviceManager(BaseModule):
                 importlib.invalidate_caches()
                 module = importlib.import_module('pydatacoll.protocols.{}.device'.format(protocol))
                 protocol_class = self.protocol_dict[protocol] = getattr(module, '{}Device'.format(protocol.upper()))
-                logger.info('fresh_device new protocol %s registered', protocol_class.__name__)
+                logger.info('fresh_device new protocol registered: %s ', protocol_class.__name__)
             self.device_dict[device_id] = protocol_class(device_dict, self.io_loop, self.redis_pool)
         except Exception as ee:
             logger.error('fresh_device failed: %s', repr(ee), exc_info=True)

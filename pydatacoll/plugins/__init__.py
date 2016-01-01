@@ -36,12 +36,12 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
             self.sub_client = await self.redis_pool.acquire()
             self.sub_channels = await self.sub_client.psubscribe(*[a['channel'] for a in self.module_arg_dict.values()])
             for channel in self.sub_channels:
-                asyncio.ensure_future(self._msg_reader(channel))
+                asyncio.ensure_future(self._msg_reader(channel), loop=self.io_loop)
             await self.start()
             self.initialized = True
-            logger.info('plugin %s installed', type(self).__name__)
+            logger.info('%s plugin installed', type(self).__name__)
         except Exception as e:
-            logger.error('plugin %s install failed: %s', type(self).__name__, repr(e), exc_info=True)
+            logger.error('%s plugin install failed: %s', type(self).__name__, repr(e), exc_info=True)
 
     async def uninstall(self):
         try:
@@ -51,9 +51,9 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
             if self._redis_pool is None:  # release the pool created by self
                 await self.redis_pool.clear()
             self.initialized = False
-            logger.info('plugin %s uninstalled', type(self).__name__)
+            logger.info('%s plugin uninstalled', type(self).__name__)
         except Exception as e:
-            logger.error('plugin %s uninstall failed: %s', type(self).__name__, repr(e), exc_info=True)
+            logger.error('%s plugin uninstall failed: %s', type(self).__name__, repr(e), exc_info=True)
 
     async def _msg_reader(self, ch):
         while await ch.wait_message():

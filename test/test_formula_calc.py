@@ -18,6 +18,8 @@ logger = my_logger.get_logger('FormulaCalcTest')
 
 
 class FormulaCalcTest(asynctest.TestCase):
+    loop = None  # make pycharm happy
+
     def setUp(self):
         super(FormulaCalcTest, self).setUp()
         self.redis_pool = asyncio.get_event_loop().run_until_complete(

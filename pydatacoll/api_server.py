@@ -1,7 +1,7 @@
 import argparse
 import pkgutil
 from collections import defaultdict
-
+import sys
 try:
     import ujson as json
 except ImportError:
@@ -9,13 +9,13 @@ except ImportError:
 import asyncio
 import functools
 import aioredis
-# import api_hour
 from aiohttp import web
 import redis
 
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.json_response import JSON
 from pydatacoll.resources.protocol import *
+from pydatacoll.resources.redis_key import *
 from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
 from pydatacoll import plugins
 
@@ -32,6 +32,7 @@ class APIServer(ParamFunctionContainer):
         if self.io_loop is None:
             self.io_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.io_loop)
+        self._redis_pool = redis_pool
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
                 functools.partial(aioredis.create_pool, ('localhost', 6379),
                                   db=1, minsize=5, maxsize=10, encoding='utf-8')())
@@ -39,23 +40,44 @@ class APIServer(ParamFunctionContainer):
         self.web_app = web.Application()
         self._add_router()
         self.web_handler = self.web_app.make_handler()
-        self.server = self.io_loop.run_until_complete(self.io_loop.create_server(self.web_handler, '127.0.0.1', port))
-        self._load_plugins()
+        self.web_server = self.io_loop.run_until_complete(self.io_loop.create_server(self.web_handler, '127.0.0.1', port))
+        self.plugin_list = list()
+        self._install_plugins()
+        logger.info('ApiServer started, listening on port %s', self.port)
 
     def _add_router(self):
         for fun_name, fun_args in self.module_arg_dict.items():
             self.web_app.router.add_route(fun_args['method'], fun_args['url'], getattr(self, fun_name), name=fun_name)
 
-    def _load_plugins(self):
+    def _install_plugins(self):
         try:
             for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
-                loader.find_module(module_name).load_module(module_name)
+                if module_name not in sys.modules:  # prevent load twice
+                    loader.find_module(module_name).load_module(module_name)
             for plugin_class in plugins.BaseModule.__subclasses__():
                 if not hasattr(plugin_class, 'not_implemented'):
                     plugin = plugin_class(self.io_loop, self.redis_pool)
                     self.io_loop.create_task(plugin.install())
+                    self.plugin_list.append(plugin)
+            logger.info("%s plugins founded: %s",
+                        len(self.plugin_list), [type(plugin).__name__ for plugin in self.plugin_list])
         except Exception as e:
-            logger.error("_load_plugins failed: %s", repr(e), exc_info=True)
+            logger.error("_install_plugins failed: %s", repr(e), exc_info=True)
+
+    def _uninstall_plugins(self):
+        for plugin in self.plugin_list:
+            self.io_loop.run_until_complete(plugin.uninstall())
+
+    def stop_server(self):
+        self._uninstall_plugins()
+        if self._redis_pool is None:  # release the pool created by self
+            self.io_loop.run_until_complete(self.redis_pool.clear())
+        self.web_server.close()
+        self.io_loop.run_until_complete(self.web_server.wait_closed())
+        self.io_loop.run_until_complete(self.web_handler.finish_connections(1.0))
+        self.io_loop.run_until_complete(self.web_app.finish())
+        self.io_loop.run_until_complete(self.redis_pool.clear())
+        logger.info('ApiServer stopped')
 
     @staticmethod
     async def _find_keys(redis_client, match: str):
@@ -90,6 +112,10 @@ class APIServer(ParamFunctionContainer):
         doc_list.append('\n'.join(sorted(method_dict['PUT'])))
         doc_list.append('\n'.join(sorted(method_dict['DELETE'])))
         return web.Response(text='\n'.join(doc_list))
+
+    @param_function(method='GET', url=r'/api/v1/redis_key')
+    async def get_redis_key(self, _):
+        return JSON(REDIS_KEY)
 
     @param_function(method='GET', url=r'/api/v1/device_protocols')
     async def get_device_protocol_list(self, _):
@@ -649,42 +675,41 @@ class APIServer(ParamFunctionContainer):
         redis_client = None
         channel_name = None
         try:
-            redis_client = await self.redis_pool.acquire()
-            call_data = await self._read_data(request)
-            call_data_dict = json.loads(call_data)
-            logger.debug('new call_data arg=%s', call_data_dict)
-            found = await redis_client.exists('HS:DEVICE:{}'.format(call_data_dict['device_id']))
-            if not found:
-                return web.Response(status=404, text='device_id not found!')
-            found = await redis_client.exists('HS:TERM:{}'.format(call_data_dict['term_id']))
-            if not found:
-                return web.Response(status=404, text='term_id not found!')
-            found = await redis_client.exists('HS:ITEM:{}'.format(call_data_dict['item_id']))
-            if not found:
-                return web.Response(status=404, text='item_id not found!')
-            found = await redis_client.exists('HS:TERM_ITEM:{}:{}'.format(
-                    call_data_dict['term_id'], call_data_dict['item_id']))
-            if not found:
-                return web.Response(status=404, text='term_item not found!')
-            await redis_client.publish('CHANNEL:DEVICE_CALL', call_data)
-            channel_name = 'CHANNEL:DEVICE_CALL:{}:{}:{}'.format(
-                    call_data_dict['device_id'], call_data_dict['term_id'], call_data_dict['item_id'])
-            res = await redis_client.subscribe(channel_name)
-            cb = asyncio.futures.Future()
+            with (await self.redis_pool) as redis_client:
+                call_data = await self._read_data(request)
+                call_data_dict = json.loads(call_data)
+                logger.debug('new call_data arg=%s', call_data_dict)
+                found = await redis_client.exists('HS:DEVICE:{}'.format(call_data_dict['device_id']))
+                if not found:
+                    return web.Response(status=404, text='device_id not found!')
+                found = await redis_client.exists('HS:TERM:{}'.format(call_data_dict['term_id']))
+                if not found:
+                    return web.Response(status=404, text='term_id not found!')
+                found = await redis_client.exists('HS:ITEM:{}'.format(call_data_dict['item_id']))
+                if not found:
+                    return web.Response(status=404, text='item_id not found!')
+                found = await redis_client.exists('HS:TERM_ITEM:{}:{}'.format(
+                        call_data_dict['term_id'], call_data_dict['item_id']))
+                if not found:
+                    return web.Response(status=404, text='term_item not found!')
+                await redis_client.publish('CHANNEL:DEVICE_CALL', call_data)
+                channel_name = 'CHANNEL:DEVICE_CALL:{}:{}:{}'.format(
+                        call_data_dict['device_id'], call_data_dict['term_id'], call_data_dict['item_id'])
+                res = await redis_client.subscribe(channel_name)
+                cb = asyncio.futures.Future(loop=self.io_loop)
 
-            async def reader(ch):
-                while await ch.wait_message():
-                    msg = await ch.get_json()
-                    logger.debug('device_call got msg: %s', msg)
-                    if not cb.done():
-                        cb.set_result(msg)
+                async def reader(ch):
+                    while await ch.wait_message():
+                        msg = await ch.get_json()
+                        logger.debug('device_call got msg: %s', msg)
+                        if not cb.done():
+                            cb.set_result(msg)
 
-            tsk = asyncio.ensure_future(reader(res[0]))
-            rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
-            await redis_client.unsubscribe(channel_name)
-            await tsk
-            self.redis_pool.release(redis_client)
-            return JSON(rst)
+                tsk = asyncio.ensure_future(reader(res[0]), loop=self.io_loop)
+                rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT, loop=self.io_loop)
+                await redis_client.unsubscribe(channel_name)
+                await tsk
+                return JSON(rst)
         except Exception as e:
             logger.exception(e)
             logger.error('device_call failed: %s', repr(e), exc_info=True)
@@ -698,42 +723,41 @@ class APIServer(ParamFunctionContainer):
         redis_client = None
         channel_name = None
         try:
-            redis_client = await self.redis_pool.acquire()
-            ctrl_data = await self._read_data(request)
-            ctrl_data_dict = json.loads(ctrl_data)
-            logger.debug('new ctrl_data arg=%s', ctrl_data_dict)
-            found = await redis_client.exists('HS:DEVICE:{}'.format(ctrl_data_dict['device_id']))
-            if not found:
-                return web.Response(status=404, text='device_id not found!')
-            found = await redis_client.exists('HS:TERM:{}'.format(ctrl_data_dict['term_id']))
-            if not found:
-                return web.Response(status=404, text='term_id not found!')
-            found = await redis_client.exists('HS:ITEM:{}'.format(ctrl_data_dict['item_id']))
-            if not found:
-                return web.Response(status=404, text='item_id not found!')
-            found = await redis_client.exists(
-                    'HS:TERM_ITEM:{}:{}'.format(ctrl_data_dict['term_id'], ctrl_data_dict['item_id']))
-            if not found:
-                return web.Response(status=404, text='term_item not found!')
-            await redis_client.publish('CHANNEL:DEVICE_CTRL', ctrl_data)
-            channel_name = 'CHANNEL:DEVICE_CTRL:{}:{}:{}'.format(
-                    ctrl_data_dict['device_id'], ctrl_data_dict['term_id'], ctrl_data_dict['item_id'])
-            res = await redis_client.subscribe(channel_name)
-            cb = asyncio.futures.Future()
+            with (await self.redis_pool) as redis_client:
+                ctrl_data = await self._read_data(request)
+                ctrl_data_dict = json.loads(ctrl_data)
+                logger.debug('new ctrl_data arg=%s', ctrl_data_dict)
+                found = await redis_client.exists('HS:DEVICE:{}'.format(ctrl_data_dict['device_id']))
+                if not found:
+                    return web.Response(status=404, text='device_id not found!')
+                found = await redis_client.exists('HS:TERM:{}'.format(ctrl_data_dict['term_id']))
+                if not found:
+                    return web.Response(status=404, text='term_id not found!')
+                found = await redis_client.exists('HS:ITEM:{}'.format(ctrl_data_dict['item_id']))
+                if not found:
+                    return web.Response(status=404, text='item_id not found!')
+                found = await redis_client.exists(
+                        'HS:TERM_ITEM:{}:{}'.format(ctrl_data_dict['term_id'], ctrl_data_dict['item_id']))
+                if not found:
+                    return web.Response(status=404, text='term_item not found!')
+                await redis_client.publish('CHANNEL:DEVICE_CTRL', ctrl_data)
+                channel_name = 'CHANNEL:DEVICE_CTRL:{}:{}:{}'.format(
+                        ctrl_data_dict['device_id'], ctrl_data_dict['term_id'], ctrl_data_dict['item_id'])
+                res = await redis_client.subscribe(channel_name)
+                cb = asyncio.futures.Future(loop=self.io_loop)
 
-            async def reader(ch):
-                while await ch.wait_message():
-                    msg = await ch.get_json()
-                    logger.debug('device_ctrl got msg: %s', msg)
-                    if not cb.done():
-                        cb.set_result(msg)
+                async def reader(ch):
+                    while await ch.wait_message():
+                        msg = await ch.get_json()
+                        logger.debug('device_ctrl got msg: %s', msg)
+                        if not cb.done():
+                            cb.set_result(msg)
 
-            tsk = asyncio.ensure_future(reader(res[0]))
-            rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
-            await redis_client.unsubscribe(channel_name)
-            await tsk
-            self.redis_pool.release(redis_client)
-            return JSON(rst)
+                tsk = asyncio.ensure_future(reader(res[0]), loop=self.io_loop)
+                rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT, loop=self.io_loop)
+                await redis_client.unsubscribe(channel_name)
+                await tsk
+                return JSON(rst)
         except Exception as e:
             logger.exception(e)
             logger.error('device_ctrl failed: %s', repr(e), exc_info=True)
@@ -747,28 +771,27 @@ class APIServer(ParamFunctionContainer):
         redis_client = None
         channel_name = None
         try:
-            redis_client = await self.redis_pool.acquire()
-            formula_data = await self._read_data(request)
-            formula_dict = json.loads(formula_data)
-            logger.debug('formula_check arg=%s', formula_dict)
-            channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(formula_dict['formula']))
-            res = await redis_client.subscribe(channel_name)
-            cb = asyncio.futures.Future()
+            with (await self.redis_pool) as redis_client:
+                formula_data = await self._read_data(request)
+                formula_dict = json.loads(formula_data)
+                logger.debug('formula_check arg=%s', formula_dict)
+                channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(formula_dict['formula']))
+                res = await redis_client.subscribe(channel_name)
+                cb = asyncio.futures.Future(loop=self.io_loop)
 
-            async def reader(ch):
-                while await ch.wait_message():
-                    msg = await ch.get(encoding='utf-8')
-                    if not cb.done():
-                        cb.set_result(msg)
+                async def reader(ch):
+                    while await ch.wait_message():
+                        msg = await ch.get(encoding='utf-8')
+                        if not cb.done():
+                            cb.set_result(msg)
 
-            tsk = asyncio.ensure_future(reader(res[0]))
-            with (await self.redis_pool) as pub_client:
-                await pub_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
-            rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT)
-            await redis_client.unsubscribe(channel_name)
-            await tsk
-            self.redis_pool.release(redis_client)
-            return web.Response(status=200, text=rst)
+                tsk = asyncio.ensure_future(reader(res[0]), loop=self.io_loop)
+                with (await self.redis_pool) as pub_client:
+                    await pub_client.publish('CHANNEL:FORMULA_CHECK', formula_data)
+                rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT, loop=self.io_loop)
+                await redis_client.unsubscribe(channel_name)
+                await tsk
+                return web.Response(status=200, text=rst)
         except Exception as e:
             logger.exception(e)
             logger.error('formula_check failed: %s', repr(e), exc_info=True)
@@ -780,7 +803,7 @@ class APIServer(ParamFunctionContainer):
 
 def run_server(port=8080):
     api_server = APIServer(port)
-    logger.info('serving on %s', api_server.server.sockets[0].getsockname())
+    logger.info('serving on %s', api_server.web_server.sockets[0].getsockname())
     asyncio.get_event_loop().run_forever()
 
 
