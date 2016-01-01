@@ -7,7 +7,6 @@ import redis
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.protocols.iec104.frame import *
 from pydatacoll.utils import str_to_number
-from . import mock_data
 
 logger = my_logger.get_logger('MockIEC104')
 
@@ -34,14 +33,14 @@ class IEC104Device(asyncio.Protocol):
         self.task_handler = None
         self.transport = None
         self.device_id = None
-        logger.info('mock device server start!')
+        logger.debug('mock device server start!')
 
     def connection_made(self, transport):
         self.device_id = transport.get_extra_info('sockname')[1] - 2403
         self.io_loop = asyncio.get_event_loop()
         self.redis = redis.StrictRedis(db=1, decode_responses=True)
         self.device_info = self.redis.hgetall('HS:DEVICE:{}'.format(self.device_id))
-        logger.info('connect from %s, device_info=%s, id=%s',
+        logger.debug('connect from %s, device_info=%s, id=%s',
                      transport.get_extra_info('peername'), self.device_info, self.device_id)
         self.transport = transport
 
@@ -319,7 +318,6 @@ class IEC104Device(asyncio.Protocol):
 
 
 def run_server():
-    mock_data.generate()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     server_list = []

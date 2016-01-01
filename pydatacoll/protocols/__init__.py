@@ -31,10 +31,11 @@ class BaseDevice(object, metaclass=ABCMeta):
     async def save_frame(self, frame, send=True):
         try:
             with (await self.redis_pool) as redis_client:
-                await redis_client.rpush("LST:FRAME:{}".format(self.device_id),
-                                         '{time},{type},{frame}'.format(
-                                                 time=datetime.datetime.now().isoformat(),
-                                                 type="send" if send is True else "recv", frame=frame.hex()))
+                await redis_client.rpush(
+                        "LST:FRAME:{}".format(self.device_id),
+                        '{time},{type},{frame}'.format(
+                                time=datetime.datetime.now().isoformat(),
+                                type="send" if send is True else "recv", frame=frame.hex()))
         except Exception as e:
             logger.error("device[%s] save_frame failed: %s", self.device_id, repr(e))
 
