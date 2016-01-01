@@ -4,8 +4,6 @@ try:
     import ujson as json
 except ImportError:
     import json
-import functools
-import aioredis
 import asynctest
 import pymysql
 import redis
@@ -16,20 +14,27 @@ logger = my_logger.get_logger('DBSaverTest')
 
 
 class DBSaverTest(asynctest.TestCase):
+    loop = None  # make pycharm happy
+
     def setUp(self):
         super(DBSaverTest, self).setUp()
         self.conn = pymysql.Connect(host='127.0.0.1', port=3306, user='pydatacoll', password='pydatacoll', db='test')
         self.cursor = self.conn.cursor()
         self.cursor.execute("DROP TABLE IF EXISTS test_db_save")
-        self.cursor.execute("CREATE TABLE test_db_save(device_id INTEGER, term_id INTEGER, item_id INTEGER,"
-                            "time DATETIME, value FLOAT)")
+        self.cursor.execute("""
+CREATE TABLE test_db_save(
+  id int AUTO_INCREMENT PRIMARY KEY,
+  device_id int,
+  term_id int,
+  item_id int,
+  time datetime,
+  value float
+) ENGINE=MyISAM DEFAULT CHARSET=utf8
+""")
         self.conn.commit()
-        self.redis_pool = asyncio.get_event_loop().run_until_complete(
-                functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10,
-                                  encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         self.redis_client.flushdb()
-        self.db_saver = db_save.DBSaver(self.loop, self.redis_pool)
+        self.db_saver = db_save.DBSaver(self.loop)
         self.loop.run_until_complete(self.db_saver.install())
 
     def tearDown(self):
@@ -63,4 +68,4 @@ class DBSaverTest(asynctest.TestCase):
         self.cursor.execute("SELECT * FROM test_db_save")
         rst = self.cursor.fetchall()
         self.assertEqual(len(rst), 1)
-        self.assertEqual(rst[0][4], 123.4)
+        self.assertEqual(rst[0][5], 123.4)

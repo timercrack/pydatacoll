@@ -63,7 +63,7 @@ class IEC104Device(BaseDevice):
         self.stop_timer(IECParam.T2)
         self.stop_timer(IECParam.T3)
         self.writer and self.writer.close()
-        self.receive_handler and asyncio.wait_for(self.receive_handler, 0.5)
+        self.receive_handler and self.receive_handler.cancel()
         if self.connected:
             self.change_device_status(on_line=False)
         self.ssn = 0
@@ -114,6 +114,7 @@ class IEC104Device(BaseDevice):
 
     async def receive(self):
         try:
+            self.receive_handler = None
             data = await self.reader.readexactly(2)
             head = iec_head.parse(data)
             data += await self.reader.readexactly(head.length)
