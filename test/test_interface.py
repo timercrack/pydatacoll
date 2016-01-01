@@ -11,6 +11,7 @@ except ImportError:
 
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.resources.protocol import *
+from pydatacoll.resources.redis_key import *
 from test.mock_device import mock_data, iec104device
 from pydatacoll import api_server
 
@@ -78,6 +79,12 @@ class InterfaceTest(asynctest.TestCase):
         for server in self.server_list:
             server.close()
             self.loop.run_until_complete(server.wait_closed())
+
+    async def test_get_redis_key(self):
+        async with aiohttp.get('http://127.0.0.1:8080/api/v1/redis_key') as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.json()
+            self.assertDictEqual(rst['channel'], REDIS_KEY['channel'])
 
     async def test_get_protocol_list(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/device_protocols') as r:

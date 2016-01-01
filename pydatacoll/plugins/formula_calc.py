@@ -109,6 +109,9 @@ class FormulaCalc(BaseModule):
     async def calculate(self, formula_id):
         try:
             formula = self.formula_dict.get(formula_id)
+            if formula is None:
+                logger.warn('calculate can not found formula, formula_id=%', formula_id)
+                return
             for param, param_value in formula.items():
                 if param.startswith('p'):
                     if param in self.interp.symtable:
@@ -124,6 +127,9 @@ class FormulaCalc(BaseModule):
                 value = float(value[0])
             else:
                 logger.warn('calculate value type=%s, ignored.', type(value))
+                return
+            if math.isnan(value):
+                logger.warn('calculate formula=%s, value=NaN, ignored.', formula['formula'])
                 return
             with (await self.redis_pool) as redis_client:
                 last_value = await redis_client.hget('HS:DATA:{}'.format(formula['result']), time_str)
