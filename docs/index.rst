@@ -47,7 +47,6 @@ the following optional packages may be useful:
     package using pip::
 
         pip install -r requirements.txt
-        pip install --no-index --find-links=local_wheels -r requirements.txt
 
 2.  Then run the following to start PyDataColl server::
 

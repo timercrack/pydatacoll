@@ -14,10 +14,12 @@ logger = my_logger.get_logger('IEC104DeviceTest')
 
 
 class IEC104DeviceTest(asynctest.TestCase):
+    loop = asyncio.get_event_loop()  # make pycharm happy
+
     def setUp(self):
-        super(IEC104DeviceTest, self).setUp()
-        self.redis_pool = asyncio.get_event_loop().run_until_complete(
-            functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
+        self.redis_pool = self.loop.run_until_complete(
+            functools.partial(
+                    aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         self.server_list = list()
         mock_data.generate()
@@ -35,7 +37,6 @@ class IEC104DeviceTest(asynctest.TestCase):
 
     async def test_connect(self):
         device = IEC104Device(mock_data.device_list[0], self.loop, self.redis_pool)
-        # asyncio.wait(device.reconnect_handler)
         await asyncio.sleep(3)
         self.assertEqual(device.connected, True)
         status = self.redis_client.hget('HS:DEVICE:1', 'status')
@@ -53,7 +54,6 @@ class IEC104DeviceTest(asynctest.TestCase):
         self.assertEqual(device.connected, False)
         status = self.redis_client.hget('HS:DEVICE:1', 'status')
         self.assertEqual(status, 'off')
-        # asyncio.wait(device.reconnect_handler)
         await asyncio.sleep(5)
         self.assertEqual(device.connected, True)
         self.assertEqual(device.connect_retry_count, 1)
@@ -86,11 +86,6 @@ class IEC104DeviceTest(asynctest.TestCase):
         device.disconnect()
 
     async def test_call_all(self):
-        for code in range(100):
-            self.redis_client.hmset('HS:MAPPING:iec104:3:{}'.format(code),
-                                    {'term_id': 10, 'item_id': 20, 'protocol_code': code, 'code_type': code})
-            self.redis_client.hmset('HS:TERM_ITEM:10:20',
-                                    {'term_id': 10, 'item_id': 20, 'protocol_code': code, 'code_type': code})
         device = IEC104Device(mock_data.device_list[0], self.loop, self.redis_pool)
         await asyncio.sleep(3)
         # 100 总召唤
@@ -98,34 +93,30 @@ class IEC104DeviceTest(asynctest.TestCase):
         await device.send_frame(send_data)
         self.assertEqual(device.send_list[0].ASDU.TYP, TYP.C_IC_NA_1)
         await asyncio.sleep(3)
-        self.assertEqual(len(MockDevice.frame_list[1]), 35)  # 2U + 3S + 3I(call_all) + 27I(all data) = 35
+        self.assertEqual(len(MockDevice.frame_list[1]), 8)  # 2U + 3I(call_all) + 3(call_all_data) = 8
         device.disconnect()
 
-    async def test_call_power(self):
-        for code in range(10):
-            self.redis_client.hmset('HS:MAPPING:iec104:3:{}'.format(code),
-                                    {'term_id': 10, 'item_id': 20, 'protocol_code': code, 'code_type': 15})
-            self.redis_client.hmset('HS:TERM_ITEM:10:20',
-                                    {'term_id': 10, 'item_id': 20, 'protocol_code': code, 'code_type': 15})
-        device = IEC104Device(mock_data.device_list[0], self.loop, self.redis_pool)
-        await asyncio.sleep(3)
-        # 101 电能量召唤
-        send_data = iec_104.init_frame(device.ssn, device.rsn, TYP.C_CI_NA_1, Cause.act)
-        await device.send_frame(send_data)
-        self.assertEqual(device.send_list[0].ASDU.TYP, TYP.C_CI_NA_1)
-        await asyncio.sleep(3)
-        self.assertEqual(len(MockDevice.frame_list[1]), 16)  # 2U + 1S + 3I(call_power) + 10I(power data) = 16
-        device.disconnect()
+    # async def test_call_power(self):
+    #     for code in range(10):
+    #         self.redis_client.hmset('HS:MAPPING:iec104:3:{}'.format(code),
+    #                                 {'term_id': 10, 'item_id': 20, 'protocol_code': code, 'code_type': 15})
+    #         self.redis_client.hmset('HS:TERM_ITEM:10:20',
+    #                                 {'term_id': 10, 'item_id': 20, 'protocol_code': code, 'code_type': 15})
+    #     device = IEC104Device(mock_data.device_list[0], self.loop, self.redis_pool)
+    #     await asyncio.sleep(3)
+    #     # 101 电能量召唤
+    #     send_data = iec_104.init_frame(device.ssn, device.rsn, TYP.C_CI_NA_1, Cause.act)
+    #     await device.send_frame(send_data)
+    #     self.assertEqual(device.send_list[0].ASDU.TYP, TYP.C_CI_NA_1)
+    #     await asyncio.sleep(3)
+    #     self.assertEqual(len(MockDevice.frame_list[1]), 16)  # 2U + 1S + 3I(call_power) + 10I(power data) = 16
+    #     device.disconnect()
 
     async def test_send_data(self):
-        self.redis_client.hmset('HS:MAPPING:IEC104:1:100',
-                                {'term_id': 10, 'item_id': 20, 'protocol_code': 100, 'code_type': 63})
-        self.redis_client.hmset('HS:TERM_ITEM:10:20',
-                                {'term_id': 10, 'item_id': 20, 'protocol_code': 100, 'code_type': 63})
         device = IEC104Device(mock_data.device_list[0], self.loop, self.redis_pool)
         await asyncio.sleep(2)
         with (await self.redis_pool) as sub_client:
-            res = await sub_client.subscribe('CHANNEL:DEVICE_CTRL:1:10:20')
+            res = await sub_client.subscribe('CHANNEL:DEVICE_CTRL:1:20:1000')
             ch1 = res[0]
             cb = asyncio.futures.Future()
 
@@ -136,23 +127,19 @@ class IEC104DeviceTest(asynctest.TestCase):
                         cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(ch1))
-            await device.ctrl_data({'term_id': 10, 'item_id': 20, 'value': 123.4})
+            await device.ctrl_data({'term_id': 20, 'item_id': 1000, 'value': 123.4})
             rst = await cb
-            await sub_client.unsubscribe('CHANNEL:DEVICE_CTRL:1:10:20')
+            await sub_client.unsubscribe('CHANNEL:DEVICE_CTRL:1:20:1000')
             await tsk
 
         self.assertAlmostEqual(rst['value'], 123.4, delta=0.0001)
         device.disconnect()
 
     async def test_call_data(self):
-        self.redis_client.hmset('HS:MAPPING:IEC104:1:100',
-                                {'term_id': 10, 'item_id': 20, 'protocol_code': 100, 'code_type': 36})
-        self.redis_client.hmset('HS:TERM_ITEM:10:20',
-                                {'term_id': 10, 'item_id': 20, 'protocol_code': 100, 'code_type': 36})
         device = IEC104Device(mock_data.device_list[0], self.loop, self.redis_pool)
         await asyncio.sleep(2)
         with (await self.redis_pool) as sub_client:
-            res = await sub_client.subscribe('CHANNEL:DEVICE_CALL:1:10:20')
+            res = await sub_client.subscribe('CHANNEL:DEVICE_CALL:1:10:1000')
             cb = asyncio.futures.Future()
 
             async def reader(ch):
@@ -163,10 +150,10 @@ class IEC104DeviceTest(asynctest.TestCase):
                         cb.set_result(msg)
 
             tsk = asyncio.ensure_future(reader(res[0]))
-            await device.call_data({'term_id': 10, 'item_id': 20})
+            await device.call_data({'term_id': 10, 'item_id': 1000})
             rst = await cb
-            await sub_client.unsubscribe('CHANNEL:DEVICE_CALL:1:10:20')
+            await sub_client.unsubscribe('CHANNEL:DEVICE_CALL:1:10:1000')
             await tsk
 
-        self.assertEqual(rst['value'], 123)
+        self.assertAlmostEqual(rst['value'], 102, delta=0.0001)
         device.disconnect()

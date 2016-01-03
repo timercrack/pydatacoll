@@ -2,9 +2,8 @@ import asyncio
 import aiohttp
 import aioredis
 import asynctest
+import functools
 import redis
-import multiprocessing
-import time
 try:
     import ujson as json
 except ImportError:
@@ -12,6 +11,7 @@ except ImportError:
 
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.resources.protocol import *
+from pydatacoll.resources.redis_key import *
 from test.mock_device import mock_data, iec104device
 from pydatacoll import api_server
 
@@ -22,7 +22,7 @@ class RedisTest(asynctest.TestCase):
     async def test_connect_timeout(self):
         try:
             loop = asyncio.get_event_loop()
-            reader, writer = await asyncio.open_connection('127.0.0.1', 6379)
+            reader, writer = await asyncio.open_connection('127.0.0.1', 6379, loop=loop)
             loop.call_later(1, lambda w: w.close(), writer)
             data = await reader.readexactly(100)
             logger.debug('Received: %r', data.decode())
@@ -57,23 +57,34 @@ class RedisTest(asynctest.TestCase):
 
 
 class InterfaceTest(asynctest.TestCase):
-    # use_default_loop = True
-    @classmethod
-    def setUpClass(cls):
-        cls.redis_client = redis.StrictRedis(db=1, decode_responses=True)
-        cls.mock_device = multiprocessing.Process(target=iec104device.run_server)
-        cls.api_server = multiprocessing.Process(target=api_server.run_server)
-        cls.mock_device.start()
-        time.sleep(1)
-        cls.api_server.start()
-        time.sleep(2)
+    loop = None  # make pycharm happy
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.api_server.terminate()
-        cls.api_server.join()
-        cls.mock_device.terminate()
-        cls.mock_device.join()
+    def setUp(self):
+        self.redis_pool = self.loop.run_until_complete(
+                functools.partial(aioredis.create_pool, ('localhost', 6379),
+                                  db=1, minsize=5, maxsize=10, encoding='utf-8')())
+        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+        mock_data.generate()
+        self.server_list = list()
+        for device in mock_data.device_list:
+            if 'port' not in device:
+                continue
+            self.server_list.append(
+                self.loop.run_until_complete(
+                        self.loop.create_server(iec104device.IEC104Device, '127.0.0.1', device['port'])))
+        self.api_server = api_server.APIServer(8080, self.loop, self.redis_pool)
+
+    def tearDown(self):
+        self.api_server.stop_server()
+        for server in self.server_list:
+            server.close()
+            self.loop.run_until_complete(server.wait_closed())
+
+    async def test_get_redis_key(self):
+        async with aiohttp.get('http://127.0.0.1:8080/api/v1/redis_key') as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.json()
+            self.assertDictEqual(rst['channel'], REDIS_KEY['channel'])
 
     async def test_get_protocol_list(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/device_protocols') as r:
@@ -327,7 +338,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas/-1') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102'})
+            self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102.0'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99/terms/99/items/99/datas') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -400,7 +411,7 @@ name 'p2' is not defined
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/device_call', data=json.dumps(call_dict)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertEqual(rst['value'], 123)
+            self.assertAlmostEqual(rst['value'], 102, delta=0.0001)
 
     async def test_device_ctrl(self):
         ctrl_dict = {'device_id': '2', 'term_id': '30', 'item_id': '1000', 'value': 123.4}
