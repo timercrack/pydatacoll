@@ -31,10 +31,10 @@ class DeviceManager(BaseModule):
             device_id = str(device_dict['id'])
             device = self.device_dict.get(device_id)
             if device is not None:
-                if str(device.info['id']) != str(device_dict['id']) or \
-                                device.info['protocol'] != device_dict['protocol'] or \
-                                device.info['ip'] != device_dict['ip'] or \
-                                str(device.info['port']) != str(device_dict['port']):
+                if str(device.device_info['id']) != str(device_dict['id']) or \
+                                device.device_info['protocol'] != device_dict['protocol'] or \
+                                device.device_info['ip'] != device_dict['ip'] or \
+                                str(device.device_info['port']) != str(device_dict['port']):
                     await self.device_dict.pop(device_id).disconnect()
                 else:
                     return

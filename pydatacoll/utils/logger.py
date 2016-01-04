@@ -6,8 +6,8 @@ initLock = threading.Lock()
 rootLoggerInitialized = False
 
 log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
-level = logging.INFO
-file_log = "pydatacoll.log"  # File name
+level = logging.ERROR
+file_log = None  # File name
 console_log = True
 # sys_str = platform.system()
 # if sys_str == "Windows":

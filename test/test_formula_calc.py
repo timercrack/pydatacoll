@@ -22,12 +22,9 @@ class FormulaCalcTest(asynctest.TestCase):
 
     def setUp(self):
         super(FormulaCalcTest, self).setUp()
-        self.redis_pool = asyncio.get_event_loop().run_until_complete(
-                functools.partial(aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10,
-                                  encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         mock_data.generate()
-        self.formula_calc = formula_calc.FormulaCalc(self.loop, self.redis_pool)
+        self.formula_calc = formula_calc.FormulaCalc(self.loop)
         self.loop.run_until_complete(self.formula_calc.install())
 
     def tearDown(self):
