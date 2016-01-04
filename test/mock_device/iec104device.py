@@ -102,19 +102,25 @@ class IEC104Device(asyncio.Protocol):
                              (self.ssn, frame.APCI2), (self.rsn, frame.APCI1), (self.k, self.w))
                 # S or I, check rsn, ssn first
                 bad_frame = False
-                if self.ssn < frame.APCI2:
-                    bad_frame = True
-                else:
-                    self.k = self.ssn - frame.APCI2
-                if frame.APCI1 != 'S':
-                    if self.rsn != frame.APCI1:
+                if frame.APCI1 == 'S':  # S Frame
+                    if self.ssn < frame.APCI2 and frame.APCI2 - self.ssn < 20000:
                         bad_frame = True
                     else:
-                        self.rsn += 1
-                        self.w += 1
+                        self.k = self.ssn - frame.APCI2 if self.ssn >= frame.APCI2 else 32768 + self.ssn - frame.APCI2
+                else:  # I Frame
+                    if self.ssn < frame.APCI2 and frame.APCI2 - self.ssn < 20000:
+                        bad_frame = True
+                    else:
+                        self.k = self.ssn - frame.APCI2 if self.ssn >= frame.APCI2 else 32768 + self.ssn - frame.APCI2
+                        if self.rsn != frame.APCI1:
+                            bad_frame = True
+                        else:
+                            self.inc_rsn()
+                            self.w += 1
                 if bad_frame:
-                    logger.error(
-                        "device[%s] I_frame mismatch! try reconnect..", self.device_id)
+                    logger.error("device[%s] I_frame mismatch! self.ssn,frame.rsn=%s, self.rsn, "
+                                 "frame.ssn=%s, k,w=%s", self.device_id, (self.ssn, frame.APCI2),
+                                 (self.rsn, frame.APCI1), (self.k, self.w))
                 elif frame.APCI1 != 'S':
                     self.io_loop.create_task(self.handle_i(frame))
         except Exception as e:
@@ -166,6 +172,7 @@ class IEC104Device(asyncio.Protocol):
                 send_data = frame
                 send_data.ASDU.Cause = Cause.actcon
                 self.send_frame(send_data)
+                logger.debug('device[%s] send task data begin, ssn=%s', self.device_id, self.ssn)
                 self.generate_call_all_data()
                 send_data.ASDU.Cause = Cause.actterm
                 self.send_frame(send_data)
@@ -177,6 +184,7 @@ class IEC104Device(asyncio.Protocol):
                 self.generate_call_power_data()
                 send_data.ASDU.Cause = Cause.actterm
                 self.send_frame(send_data)
+                logger.debug('device[%s] send task data end, ssn=%s', self.device_id, self.ssn)
             # 读命令
             elif frame.ASDU.TYP == TYP.C_RD_NA_1:
                 if frame.ASDU.Cause == Cause.act:
@@ -192,7 +200,8 @@ class IEC104Device(asyncio.Protocol):
                     typ = TYP(int(term_item_dict['code_type']))
                     address = int(term_item_dict['protocol_code'])
                     send_frame = iec_104.init_frame(self.ssn, self.rsn, typ, Cause.req)
-                    send_frame.ASDU.data[0].Value = str_to_number(value) or random.uniform(100, 200)  # fixme: eval is dangerous
+                    # fixme: eval is dangerous
+                    send_frame.ASDU.data[0].Value = str_to_number(value) or random.uniform(100, 200)
                     send_frame.ASDU.data[0].Address = address
                     logger.debug('C_RD_NA_1, send_frame=%s', send_frame)
                     self.send_frame(send_frame)
@@ -282,7 +291,6 @@ class IEC104Device(asyncio.Protocol):
 
     def generate_call_all_data(self):
         try:
-            logger.info('device[%s] generate task data...', self.device_id)
             cursor = None
             all_keys = set()
             while cursor != 0:
