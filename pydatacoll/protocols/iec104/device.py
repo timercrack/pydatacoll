@@ -27,6 +27,7 @@ class IEC104Device(BaseDevice):
         self.reader = None
         self.writer = None
         self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
+        self.connecting_task = None
         self.task_handler = None
         self.receive_handler = None
         self.start_act_handler = None
@@ -37,9 +38,11 @@ class IEC104Device(BaseDevice):
             if self.reconnect_handler:
                 self.reconnect_handler = None
             self.user_canceled = False
-            self.reader, self.writer = await asyncio.wait_for(
+            self.connecting_task = self.io_loop.create_task(asyncio.wait_for(
                     asyncio.open_connection(self.device_info['ip'], self.device_info['port'], loop=self.io_loop),
-                    timeout=IECParam.T0)
+                    timeout=IECParam.T0))
+            self.reader, self.writer = await self.connecting_task
+            self.connecting_task = None
             self.change_device_status(on_line=True)
             self.receive_handler = self.io_loop.create_task(self.receive())
             await self.send_frame(iec_104.init_frame(UFrame.STARTDT_ACT))
@@ -60,6 +63,8 @@ class IEC104Device(BaseDevice):
         elif self.reconnect_handler is None:
             self.reconnect_handler = self.io_loop.call_later(3, lambda: self.io_loop.create_task(self.reconnect()))
             self.connect_retry_count += 1
+        if self.connecting_task:
+            self.connecting_task.cancel()
         self.stop_timer(IECParam.T1)
         self.stop_timer(IECParam.T2)
         self.stop_timer(IECParam.T3)

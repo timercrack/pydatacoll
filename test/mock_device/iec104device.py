@@ -200,7 +200,6 @@ class IEC104Device(asyncio.Protocol):
                     typ = TYP(int(term_item_dict['code_type']))
                     address = int(term_item_dict['protocol_code'])
                     send_frame = iec_104.init_frame(self.ssn, self.rsn, typ, Cause.req)
-                    # fixme: eval is dangerous
                     send_frame.ASDU.data[0].Value = str_to_number(value) or random.uniform(100, 200)
                     send_frame.ASDU.data[0].Address = address
                     logger.debug('C_RD_NA_1, send_frame=%s', send_frame)
