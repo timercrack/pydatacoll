@@ -57,7 +57,7 @@ class APIServer(ParamFunctionContainer):
             for plugin_class in plugins.BaseModule.__subclasses__():
                 if not hasattr(plugin_class, 'not_implemented'):
                     plugin = plugin_class(self.io_loop, self.redis_pool)
-                    self.io_loop.create_task(plugin.install())
+                    self.io_loop.run_until_complete(plugin.install())
                     self.plugin_list.append(plugin)
             logger.info("%s plugins founded: %s",
                         len(self.plugin_list), [type(plugin).__name__ for plugin in self.plugin_list])

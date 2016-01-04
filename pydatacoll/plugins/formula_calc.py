@@ -19,6 +19,7 @@ logger = my_logger.get_logger('FormulaCalc')
 
 
 class FormulaCalc(BaseModule):
+    # not_implemented = True
     formula_dict = dict()  # HS:TERM_ITEM:{term_id}:{item_id} -> value of HS:FORMULA:{formula_id}
     pandas_dict = dict()  # HS:DATA:{formula_id}:{term_id}:{item_id} -> pandas.Series
     interp = Interpreter(use_numpy=False)
