@@ -1,7 +1,6 @@
 aiohttp==0.20.1
 aiomysql==0.0.6
 aioredis==0.2.4
-asteval==0.9.5
 asynctest==0.5.0
 cchardet==1.0.0
 construct==2.5.2

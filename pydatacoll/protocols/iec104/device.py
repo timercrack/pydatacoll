@@ -13,7 +13,8 @@ class IEC104Device(BaseDevice):
     def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop,
                  redis_pool: aioredis.RedisPool):
         super(IEC104Device, self).__init__(device_info, io_loop, redis_pool)
-        self.coll_interval = datetime.timedelta(minutes=1)
+        self.coll_interval = datetime.timedelta(minutes=15)
+        self.coll_count = 0
         self.ssn = 0
         self.rsn = 0
         self.k = 0
@@ -26,6 +27,7 @@ class IEC104Device(BaseDevice):
         self.reader = None
         self.writer = None
         self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
+        self.connecting_task = None
         self.task_handler = None
         self.receive_handler = None
         self.start_act_handler = None
@@ -36,9 +38,11 @@ class IEC104Device(BaseDevice):
             if self.reconnect_handler:
                 self.reconnect_handler = None
             self.user_canceled = False
-            self.reader, self.writer = await asyncio.wait_for(
+            self.connecting_task = self.io_loop.create_task(asyncio.wait_for(
                     asyncio.open_connection(self.device_info['ip'], self.device_info['port'], loop=self.io_loop),
-                    timeout=IECParam.T0)
+                    timeout=IECParam.T0))
+            self.reader, self.writer = await self.connecting_task
+            self.connecting_task = None
             self.change_device_status(on_line=True)
             self.receive_handler = self.io_loop.create_task(self.receive())
             await self.send_frame(iec_104.init_frame(UFrame.STARTDT_ACT))
@@ -59,6 +63,8 @@ class IEC104Device(BaseDevice):
         elif self.reconnect_handler is None:
             self.reconnect_handler = self.io_loop.call_later(3, lambda: self.io_loop.create_task(self.reconnect()))
             self.connect_retry_count += 1
+        if self.connecting_task:
+            self.connecting_task.cancel()
         self.stop_timer(IECParam.T1)
         self.stop_timer(IECParam.T2)
         self.stop_timer(IECParam.T3)
@@ -118,11 +124,12 @@ class IEC104Device(BaseDevice):
             data = await self.reader.readexactly(2)
             head = iec_head.parse(data)
             data += await self.reader.readexactly(head.length)
+            recv_time = datetime.datetime.now()
             self.start_timer(IECParam.T3)
             self.receive_handler = self.io_loop.create_task(self.receive())
             logger.debug("device[%s] recv: %s", self.device_id, data.hex())
             frame = iec_104.parse(data)
-            self.io_loop.create_task(self.save_frame(data, send=False))
+            self.io_loop.create_task(self.save_frame(data, send=False, save_time=recv_time))
             if isinstance(frame.APCI1, UFrame):
                 await self.handle_u(frame)
             else:
@@ -130,19 +137,27 @@ class IEC104Device(BaseDevice):
                              self.device_id, (self.ssn, frame.APCI2), (self.rsn, frame.APCI1), (self.k, self.w))
                 # S or I, check rsn, ssn first
                 bad_frame = False
-                if self.ssn < frame.APCI2:
-                    bad_frame = True
-                else:
-                    self.k = self.ssn - frame.APCI2
-                if frame.APCI1 != 'S':
-                    if self.rsn != frame.APCI1:
+                if frame.APCI1 == 'S':  # S Frame
+                    if self.ssn < frame.APCI2 and frame.APCI2 - self.ssn < 20000:
                         bad_frame = True
                     else:
-                        self.rsn += 1
-                        self.w += 1
+                        self.k = self.ssn - frame.APCI2 if self.ssn >= frame.APCI2 else 32768 + self.ssn - frame.APCI2
+                else:  # I Frame
+                    if self.ssn < frame.APCI2 and frame.APCI2 - self.ssn < 20000:
+                        bad_frame = True
+                    else:
+                        self.k = self.ssn - frame.APCI2 if self.ssn >= frame.APCI2 else 32768 + self.ssn - frame.APCI2
+                        if self.rsn != frame.APCI1:
+                            bad_frame = True
+                        else:
+                            self.inc_rsn()
+                            self.w += 1
                 if bad_frame:
-                    logger.error("device[%s] I_frame mismatch! try reconnect..", self.device_id)
+                    logger.error("device[%s] I_frame mismatch! self.ssn,frame.rsn=%s, self.rsn, "
+                                 "frame.ssn=%s, k,w=%s", self.device_id, (self.ssn, frame.APCI2),
+                                 (self.rsn, frame.APCI1), (self.k, self.w))
                     if self.reconnect_handler is None:
+                        logger.info('device[%s] try reconnect..', self.device_id)
                         self.disconnect(reconnect=True)
                 elif frame.APCI1 != 'S':
                     await self.handle_i(frame)
@@ -247,6 +262,10 @@ class IEC104Device(BaseDevice):
             elif frame.ASDU.Cause == Cause.actterm:
                 if frame.ASDU.TYP == TYP.C_CI_NA_1:  # 电能脉冲召唤命令
                     self.last_call_all_time_end = datetime.datetime.now()
+                    spent = self.last_call_all_time_end - self.last_call_all_time_begin
+                    self.coll_count += 1
+                    logger.info('device[%s] last task costs: %s seconds, rsn=%s, task_count=%s',
+                                self.device_id, spent.total_seconds(), self.rsn, self.coll_count)
             elif frame.ASDU.Cause == Cause.act:
                 logger.warn('device[%s] handle_i: act frame not allowed!', self.device_id)
             # TODO: 完成尚未实现的I帧
@@ -312,7 +331,7 @@ class IEC104Device(BaseDevice):
                 logger.debug("device[%s] send_frame(%s): %s", self.device_id,
                              frame.APCI1 if frame.APCI1 == "S" or isinstance(frame.APCI1, UFrame) else
                              frame.ASDU.TYP, encode_frame.hex())
-                self.io_loop.create_task(self.save_frame(encode_frame, send=True))
+                self.io_loop.create_task(self.save_frame(encode_frame, send=True, save_time=datetime.datetime.now()))
             logger.debug("device[%s] after send_frame: send_list=%s", self.device_id,
                          [frm.APCI1 if frm.APCI1 == 'S' or isinstance(frm.APCI1, UFrame) else
                           frm.ASDU.TYP for frm in self.send_list])
@@ -341,26 +360,15 @@ class IEC104Device(BaseDevice):
 
     async def run_task(self):
         try:
-            # now = datetime.datetime.now()
-            # self.last_call_all_time_end = self.last_call_all_time_end or now
-            # logger.info('device[%s] run_task last_call_time=%s', self.device_id, self.last_call_all_time_end)
-            # if self.last_call_all_time_end + self.coll_interval <= now:
-            #     self.last_call_all_time_begin = now
-            #     # 103 时钟同步命令
-            #     await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CS_NA_1, Cause.act))
-            #     # 100 总召唤
-            #     await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_IC_NA_1, Cause.act))
-            #     # 101 电能量召唤
-            #     await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CI_NA_1, Cause.act))
+            self.last_call_all_time_begin = datetime.datetime.now()
             await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CS_NA_1, Cause.act))
             await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_IC_NA_1, Cause.act))
             await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CI_NA_1, Cause.act))
             if self.task_handler:
                 self.task_handler.cancel()
-            # time_delta = self.last_call_all_time_end + self.coll_interval - now
             self.task_handler = self.io_loop.call_later(
                     self.coll_interval.seconds, lambda: self.io_loop.create_task(self.run_task()))
-            logger.info('device[%s] run_task next task after %s seconds', self.device_id, self.coll_interval.seconds)
+            logger.debug('device[%s] run next task after %s seconds', self.device_id, self.coll_interval.total_seconds())
         except Exception as e:
             logger.error("device[%s] run_task failed: %s", self.device_id, repr(e), exc_info=True)
 

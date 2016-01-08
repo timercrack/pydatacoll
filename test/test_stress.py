@@ -21,9 +21,6 @@ class StressingTest(asynctest.TestCase):
     loop = None  # make pycharm happy
 
     def setUp(self):
-        self.redis_pool = self.loop.run_until_complete(
-                functools.partial(aioredis.create_pool, ('localhost', 6379),
-                                  db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         mock_data.generate()
         self.server_list = list()
@@ -33,7 +30,7 @@ class StressingTest(asynctest.TestCase):
             self.server_list.append(
                 self.loop.run_until_complete(
                         self.loop.create_server(iec104device.IEC104Device, '127.0.0.1', device['port'])))
-        self.api_server = api_server.APIServer(8080, self.loop, self.redis_pool)
+        self.api_server = api_server.APIServer(8080, self.loop)
 
     def tearDown(self):
         self.api_server.stop_server()

@@ -28,13 +28,13 @@ class BaseDevice(object, metaclass=ABCMeta):
                         aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
 
-    async def save_frame(self, frame, send=True):
+    async def save_frame(self, frame, send=True, save_time=datetime.datetime.now()):
         try:
             with (await self.redis_pool) as redis_client:
                 await redis_client.rpush(
                         "LST:FRAME:{}".format(self.device_id),
                         '{time},{type},{frame}'.format(
-                                time=datetime.datetime.now().isoformat(),
+                                time=save_time.isoformat(),
                                 type="send" if send is True else "recv", frame=frame.hex()))
         except Exception as e:
             logger.error("device[%s] save_frame failed: %s", self.device_id, repr(e))
