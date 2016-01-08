@@ -4,8 +4,6 @@ try:
     import ujson as json
 except ImportError:
     import json
-import functools
-import aioredis
 import asynctest
 import redis
 import pandas as pd
