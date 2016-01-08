@@ -17,5 +17,5 @@ PyDataColl can be roughly divided into three parts:
 
 * Many devices and terms under control of DeviceManager operate with coded data over communication channels(TCP/IP)
   so as to provide control of remote equipment(meter or sensor). Each type of Device can communicate with one type of
-  meter with specify protocol, such as `Modbus-RTU <https://en.wikipedia.org/wiki/Modbus>`_,
-  `IEC 60870-5-104 <https://en.wikipedia.org/wiki/IEC_60870-5>`_.
+  meter with specify protocol, such as `Modbus TCP <https://en.wikipedia.org/wiki/Modbus>`_,
+  `IEC 60870-5-104 <https://en.wikipedia.org/wiki/IEC_60870-5#IEC_60870-5-104>`_.
