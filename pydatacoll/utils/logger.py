@@ -12,9 +12,11 @@ console_log = True
 sys_str = platform.system()
 if sys_str == "Windows":
     file_log = "pydatacoll.log"
-# elif sys_str == "Linux":
-#     file_log = "pydatacoll.log"
-#     console_log = False
+elif sys_str == "Linux":
+    file_log = "pydatacoll.log"
+    console_log = False
+elif sys_str == "Darwin":  # Mac OS X
+    file_log = "pydatacoll.log"
 
 
 def init_handler(handler):

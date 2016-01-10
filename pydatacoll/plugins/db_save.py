@@ -1,12 +1,12 @@
 from collections import namedtuple
 import math
-
 try:
     import ujson as json
 except ImportError:
     import json
 import aiomysql
 from pydatacoll.plugins import BaseModule
+from pydatacoll.utils.asteval import Interpreter
 from pydatacoll.utils.func_container import param_function
 import pydatacoll.utils.logger as my_logger
 
@@ -22,6 +22,7 @@ PLUGIN_PARAM = dict(
 class DBSaver(BaseModule):
     # not_implemented = True
     mysql_pool = None
+    interp = Interpreter(use_numpy=False)
 
     async def start(self):
         self.mysql_pool = await aiomysql.create_pool(**PLUGIN_PARAM)
@@ -36,9 +37,11 @@ class DBSaver(BaseModule):
     async def save_mysql(self, channel, data_dict):
         try:
             logger.debug('save_mysql: got msg, channel=%s, dat_dict=%s', channel, data_dict)
-            param = namedtuple('Param', data_dict.keys())(**data_dict)
             with (await self.redis_pool) as redis_client:
-                term_item = await redis_client.hgetall('HS:TERM_ITEM:{param.term_id}:{param.item_id}'.format(param=param))
+                term_item = await redis_client.hgetall('HS:TERM_ITEM:{}:{}'.format(
+                        data_dict['term_id'], data_dict['item_id']))
+                data_dict.update(term_item)
+                param = namedtuple('Param', data_dict.keys())(**data_dict)
                 if term_item and 'db_save_sql' in term_item:
                     last_value = None
                     last_key = await redis_client.lindex('LST:DATA_TIME:{}:{}:{}'.format(
@@ -52,6 +55,19 @@ class DBSaver(BaseModule):
                         save_sql = term_item['db_save_sql'].format(PARAM=param)
                         logger.debug('save_mysql: saving data, sql=%s', save_sql)
                         await cur.execute(save_sql)
+                        await conn.commit()
+                        await conn.ensure_closed()
+                        self.mysql_pool.release(conn)
+                if term_item and 'do_verify' in term_item and 'db_warn_sql' in term_item:
+                    self.interp.symtable['param'] = param
+                    self.interp.symtable['value'] = str(param.value)
+                    check_rst = self.interp(param.do_verify)
+                    if not check_rst:
+                        conn = await self.mysql_pool.acquire()
+                        cur = await conn.cursor()
+                        warn_sql = term_item['db_warn_sql'].format(PARAM=param)
+                        logger.debug('save_mysql: save alert, sql=%s', warn_sql)
+                        await cur.execute(warn_sql)
                         await conn.commit()
                         await conn.ensure_closed()
                         self.mysql_pool.release(conn)
