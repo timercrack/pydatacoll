@@ -33,6 +33,7 @@ class IEC104Device(asyncio.Protocol):
         self.task_handler = None
         self.transport = None
         self.device_id = None
+        self.log_frame = config.getboolean('IEC104', 'log_frame', fallback=True)
         logger.debug('mock device server start!')
 
     def connection_made(self, transport):
@@ -94,7 +95,8 @@ class IEC104Device(asyncio.Protocol):
             self.start_timer(IECParam.T3)
             logger.debug("device[%s] recv: %s", self.device_id, data.hex())
             frame = iec_104.parse(data)
-            self.save_frame(frame, False)
+            if self.log_frame:
+                    self.save_frame(frame, False)
             if isinstance(frame.APCI1, UFrame):
                 self.io_loop.create_task(self.handle_u(frame))
             else:
@@ -142,7 +144,7 @@ class IEC104Device(asyncio.Protocol):
             elif frame.APCI1 == UFrame.TESTFR_ACT:
                 # 对方也发送了TESTFR_ACT, 删除之前自己发送的TESTFR_ACT
                 if self.send_list and self.send_list[0].APCI1 == UFrame.TESTFR_ACT:
-                    logger.info('device[%s] remote side send TESTFR_ACT too, ignored mine', self.device_id)
+                    logger.debug('device[%s] remote side send TESTFR_ACT too, ignored mine', self.device_id)
                     self.send_list.popleft()
                     self.stop_timer(IECParam.T1)
                 self.send_frame(iec_104.init_frame(UFrame.TESTFR_CON))
@@ -260,7 +262,8 @@ class IEC104Device(asyncio.Protocol):
                 logger.debug("device[%s] send_frame(%s): %s", self.device_id,
                              frame.APCI1 if frame.APCI1 == "S" or isinstance(frame.APCI1, UFrame) else frame.ASDU.TYP,
                              encode_frame.hex())
-                self.save_frame(frame, send=True)
+                if self.log_frame:
+                    self.save_frame(frame, send=True)
             # logger.debug("device[%s] send_list=%s", self.device_id,
             #              [frm.APCI1 if frm.APCI1 == 'S' or isinstance(frm.APCI1, UFrame) else
             #               frm.ASDU.TYP for frm in self.send_list])
@@ -325,14 +328,18 @@ class IEC104Device(asyncio.Protocol):
 
 
 def run_server():
-    print('mock device running.')
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     server_list = []
-    for idx in range(5):
+    s = redis.StrictRedis(db=1, decode_responses=True)
+    device_list = s.smembers('SET:DEVICE')
+    print('mock device count =', len(device_list))
+    for idx in device_list:
         server_list.append(
-            loop.run_until_complete(loop.create_server(IEC104Device, '127.0.0.1', 2404+idx)))
+            loop.run_until_complete(
+                    loop.create_server(IEC104Device, '127.0.0.1', 2404+int(idx))))
     try:
+        print('mock device running.')
         loop.run_forever()
     except KeyboardInterrupt:
         pass

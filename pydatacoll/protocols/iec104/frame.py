@@ -1,7 +1,7 @@
 from construct import *
 from enum import IntEnum
 import datetime
-from pydatacoll.utils.read_config import *
+from pydatacoll.utils.read_config import config
 
 
 class IECParam(IntEnum):
