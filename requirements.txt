@@ -1,11 +1,13 @@
-aiohttp==0.20.1
+aiohttp==0.20.2
 aiomysql==0.0.6
 aioredis==0.2.4
+appdirs==1.4.0
 asynctest==0.5.0
 cchardet==1.0.0
+chardet==2.3.0
 construct==2.5.2
 hiredis==0.2.0
-numpy==1.10.2
+numpy==1.10.4
 pandas==0.17.1
 PyMySQL==0.6.7
 python-dateutil==2.4.2

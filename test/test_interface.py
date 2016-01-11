@@ -14,6 +14,7 @@ from pydatacoll.resources.protocol import *
 from pydatacoll.resources.redis_key import *
 from test.mock_device import mock_data, iec104device
 from pydatacoll import api_server
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('TestInterface')
 
@@ -22,7 +23,8 @@ class RedisTest(asynctest.TestCase):
     async def test_connect_timeout(self):
         try:
             loop = asyncio.get_event_loop()
-            reader, writer = await asyncio.open_connection('127.0.0.1', 6379, loop=loop)
+            reader, writer = await asyncio.open_connection(config.get('REDIS', 'host', fallback='127.0.0.1'),
+                                                           config.getint('REDIS', 'port', fallback=6379), loop=loop)
             loop.call_later(1, lambda w: w.close(), writer)
             data = await reader.readexactly(100)
             logger.debug('Received: %r', data.decode())
@@ -34,8 +36,12 @@ class RedisTest(asynctest.TestCase):
             logger.error('e=', repr(e))
 
     async def test_redis_listen(self):
-        pub_client = await aioredis.create_redis(('localhost', 6379), db=1)
-        sub_client = await aioredis.create_redis(('localhost', 6379), db=1)
+        pub_client = await aioredis.create_redis((config.get('REDIS', 'host', fallback='127.0.0.1'),
+                                                  config.getint('REDIS', 'port', fallback=6379)),
+                                                 db=config.getint('REDIS', 'db', fallback=1))
+        sub_client = await aioredis.create_redis((config.get('REDIS', 'host', fallback='127.0.0.1'),
+                                                  config.getint('REDIS', 'port', fallback=6379)),
+                                                 db=config.getint('REDIS', 'db', fallback=1))
         res = await sub_client.subscribe('channel:foo')
         ch1 = res[0]
 
@@ -69,7 +75,7 @@ class InterfaceTest(asynctest.TestCase):
             self.server_list.append(
                 self.loop.run_until_complete(
                         self.loop.create_server(iec104device.IEC104Device, '127.0.0.1', device['port'])))
-        self.api_server = api_server.APIServer(8080, self.loop)
+        self.api_server = api_server.APIServer(io_loop=self.loop, port=8080)
 
     def tearDown(self):
         self.api_server.stop_server()

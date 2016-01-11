@@ -110,17 +110,4 @@ class DeviceManager(BaseModule):
 
 
 if __name__ == '__main__':
-    import asyncio
-
-    loop = asyncio.get_event_loop()
-    device_manager = DeviceManager(loop)
-    try:
-        loop.create_task(device_manager.install())
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        logger.error('run device_manager failed: %s', repr(e), exc_info=True)
-    finally:
-        loop.run_until_complete(device_manager.uninstall())
-    loop.close()
+    DeviceManager.run()

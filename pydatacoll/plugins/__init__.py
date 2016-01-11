@@ -5,6 +5,7 @@ import aioredis
 
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.func_container import ParamFunctionContainer
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('BaseModule')
 
@@ -16,8 +17,12 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
         self.io_loop = io_loop or asyncio.get_event_loop()
         self._redis_pool = redis_pool
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-                functools.partial(
-                        aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=20, encoding='utf-8')())
+                functools.partial(aioredis.create_pool, (config.get('REDIS', 'host', fallback='localhost'),
+                                                         config.getint('REDIS', 'port', fallback=6379)),
+                                  db=config.getint('REDIS', 'db', fallback=1),
+                                  minsize=config.getint('REDIS', 'minsize', fallback=5),
+                                  maxsize=config.getint('REDIS', 'maxsize', fallback=10),
+                                  encoding=config.get('REDIS', 'encoding', fallback='utf-8'))())
         self.initialized = False
         self.sub_client = None
         self.sub_channels = list()
@@ -70,3 +75,19 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
     @abstractmethod
     async def stop(self):
         pass
+
+    @classmethod
+    def run(cls):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        plugin = cls(loop)
+        try:
+            loop.create_task(plugin.install())
+            loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            logger.error('run failed: %s', repr(e), exc_info=True)
+        finally:
+            loop.run_until_complete(plugin.uninstall())
+        loop.close()

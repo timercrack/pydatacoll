@@ -1,15 +1,22 @@
 from construct import *
 from enum import IntEnum
 import datetime
+from pydatacoll.utils.read_config import *
 
 
 class IECParam(IntEnum):
-    T0 = 30  # socket的connect / listen超时
-    T1 = 15  # 发送I帧或U帧后，等待对方应答，等待超过T1则重启链路
-    T2 = 10  # 接收到I帧后等待T2时间，然后发送对I帧的应答
-    T3 = 20  # T3时间内未收到任何报文，发送TESTFR
-    K = 12  # 发送方在有k个I格式报文未得到对方的确认时，将停止数据传送
-    W = 8  # 接收方最迟在接收了w个I格式报文后应发出认可
+    # socket的connect / listen超时
+    T0 = config.getint('IEC104', 'T0', fallback=30)
+    # 发送I帧或U帧后，等待对方应答，等待超过T1则重启链路
+    T1 = config.getint('IEC104', 'T1', fallback=15)
+    # 接收到I帧后等待T2时间，然后发送对I帧的应答
+    T2 = config.getint('IEC104', 'T2', fallback=10)
+    # T3时间内未收到任何报文，发送TESTFR
+    T3 = config.getint('IEC104', 'T3', fallback=20)
+    # 发送方在有k个I格式报文未得到对方的确认时，将停止数据传送
+    K = config.getint('IEC104', 'K', fallback=12)
+    # 接收方最迟在接收了w个I格式报文后应发出认可
+    W = config.getint('IEC104', 'W', fallback=8)
 
 
 class UFrame(IntEnum):

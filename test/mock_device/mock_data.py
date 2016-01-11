@@ -14,6 +14,7 @@
 """
 import datetime
 import redis
+from pydatacoll.utils.read_config import *
 
 test_formula = {'id': '9', 'formula': 'p1+p2', 'device_id': '2', 'term_id': '30', 'item_id': '2000',
                 'p1': '1:10:1000',
@@ -81,7 +82,7 @@ device2_term30_item1000 = {
 
 
 def generate():
-    redis_client = redis.StrictRedis(db=1, decode_responses=True)
+    redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
     redis_client.flushdb()
     [redis_client.hmset('HS:DEVICE:{}'.format(device['id']), device) for device in device_list]
     [redis_client.hmset('HS:TERM:{}'.format(term['id']), term) for term in term_list]

@@ -9,6 +9,7 @@ from pydatacoll.protocols.iec104.device import IEC104Device
 from pydatacoll.protocols.iec104.frame import *
 from test.mock_device.iec104device import IEC104Device as MockDevice
 from test.mock_device import mock_data
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('IEC104DeviceTest')
 
@@ -18,9 +19,13 @@ class IEC104DeviceTest(asynctest.TestCase):
 
     def setUp(self):
         self.redis_pool = self.loop.run_until_complete(
-            functools.partial(
-                    aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
-        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+                functools.partial(aioredis.create_pool, (config.get('REDIS', 'host', fallback='127.0.0.1'),
+                                                         config.getint('REDIS', 'port', fallback=6379)),
+                                  db=config.getint('REDIS', 'db', fallback=1),
+                                  minsize=config.getint('REDIS', 'minsize', fallback=5),
+                                  maxsize=config.getint('REDIS', 'maxsize', fallback=10),
+                                  encoding=config.get('REDIS', 'encoding', fallback='utf-8'))())
+        self.redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
         self.server_list = list()
         mock_data.generate()
         for device in mock_data.device_list:

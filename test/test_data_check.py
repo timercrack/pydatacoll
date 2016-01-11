@@ -9,6 +9,7 @@ import pymysql
 import redis
 import pydatacoll.utils.logger as my_logger
 import pydatacoll.plugins.db_save as db_save
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('DataCheckTest')
 
@@ -18,7 +19,7 @@ class DataCheckTest(asynctest.TestCase):
 
     def setUp(self):
         super(DataCheckTest, self).setUp()
-        self.conn = pymysql.Connect(host='127.0.0.1', port=3306, user='pydatacoll', password='pydatacoll', db='test')
+        self.conn = pymysql.Connect(**db_save.PLUGIN_PARAM)
         self.cursor = self.conn.cursor()
         self.cursor.execute("DROP TABLE IF EXISTS test_data_check")
         self.cursor.execute("""
@@ -33,7 +34,7 @@ CREATE TABLE test_data_check(
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8
 """)
         self.conn.commit()
-        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+        self.redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
         self.redis_client.flushdb()
         self.db_saver = db_save.DBSaver(self.loop)
         self.loop.run_until_complete(self.db_saver.install())
@@ -52,11 +53,8 @@ CREATE TABLE test_data_check(
             'do_verify': 'param.down_limit <= value <= param.up_limit',
         }
         self.redis_client.hmset('HS:TERM_ITEM:10:20', term_item)
-        pub_data = {
-            'device_id': 1, 'term_id': 10, 'item_id': 20,
-            'time': datetime.datetime.now().isoformat(), 'value': 123.4,
-        }
         time_str = datetime.datetime.now().isoformat()
+        pub_data = {'device_id': 1, 'term_id': 10, 'item_id': 20, 'time': time_str, 'value': 123.4}
         self.redis_client.rpush('LST:DATA_TIME:1:10:20', time_str)
         self.redis_client.hset('HS:DATA:1:10:20', time_str, 123.4)
         self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:20', json.dumps(pub_data))
