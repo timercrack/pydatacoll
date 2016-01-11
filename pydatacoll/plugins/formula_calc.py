@@ -178,3 +178,6 @@ class FormulaCalc(BaseModule):
             rst = repr(ee)
         finally:
             return rst
+
+if __name__ == '__main__':
+    FormulaCalc.run()

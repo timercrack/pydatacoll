@@ -1,5 +1,6 @@
 from collections import namedtuple
 import math
+
 try:
     import ujson as json
 except ImportError:
@@ -9,13 +10,16 @@ from pydatacoll.plugins import BaseModule
 from pydatacoll.utils.asteval import Interpreter
 from pydatacoll.utils.func_container import param_function
 import pydatacoll.utils.logger as my_logger
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('DBSaver')
 
 PLUGIN_PARAM = dict(
-        host='127.0.0.1', port=3306,
-        user='pydatacoll', password='pydatacoll',
-        db='test', no_delay=None
+        host=config.get('MYSQL', 'host', fallback='127.0.0.1'),
+        port=config.getint('MYSQL', 'port', fallback=3306),
+        user=config.get('MYSQL', 'user', fallback='pydatacoll'),
+        password=config.get('MYSQL', 'password', fallback='pydatacoll'),
+        db=config.get('MYSQL', 'db', fallback='pydatacoll'),
 )
 
 
@@ -25,7 +29,9 @@ class DBSaver(BaseModule):
     interp = Interpreter(use_numpy=False)
 
     async def start(self):
-        self.mysql_pool = await aiomysql.create_pool(**PLUGIN_PARAM)
+        self.mysql_pool = await aiomysql.create_pool(**PLUGIN_PARAM,
+                                                     minsize=config.getint('MYSQL', 'minsize', fallback=5),
+                                                     maxsize=config.getint('MYSQL', 'maxsize', fallback=20))
 
     async def stop(self):
         if self.mysql_pool is not None:
@@ -48,7 +54,7 @@ class DBSaver(BaseModule):
                             param.device_id, param.term_id, param.item_id), -2)
                     if last_key:
                         last_value = await redis_client.hget('HS:DATA:{}:{}:{}'.format(
-                            param.device_id, param.term_id, param.item_id), last_key)
+                                param.device_id, param.term_id, param.item_id), last_key)
                     if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                         conn = await self.mysql_pool.acquire()
                         cur = await conn.cursor()
@@ -73,3 +79,6 @@ class DBSaver(BaseModule):
                         self.mysql_pool.release(conn)
         except Exception as ee:
             logger.error('save_mysql failed: %s', repr(ee), exc_info=True)
+
+if __name__ == '__main__':
+    DBSaver.run()

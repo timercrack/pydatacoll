@@ -12,6 +12,7 @@ except ImportError:
 from abc import ABCMeta, abstractmethod
 
 from pydatacoll.utils import logger as my_logger
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('BaseDevice')
 
@@ -24,9 +25,13 @@ class BaseDevice(object, metaclass=ABCMeta):
         self.device_id = self.device_info['id']
         self.io_loop = io_loop or asyncio.get_event_loop()
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-                functools.partial(
-                        aioredis.create_pool, ('localhost', 6379), db=1, minsize=5, maxsize=10, encoding='utf-8')())
-        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+                functools.partial(aioredis.create_pool, (config.get('REDIS', 'host', fallback='localhost'),
+                                                         config.getint('REDIS', 'port', fallback=6379)),
+                                  db=config.getint('REDIS', 'db', fallback=1),
+                                  minsize=config.getint('REDIS', 'minsize', fallback=5),
+                                  maxsize=config.getint('REDIS', 'maxsize', fallback=10),
+                                  encoding=config.get('REDIS', 'encoding', fallback='utf-8'))())
+        self.redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
 
     async def save_frame(self, frame, send=True, save_time=datetime.datetime.now()):
         try:
@@ -119,11 +124,6 @@ class BaseDevice(object, metaclass=ABCMeta):
                         time_str = data_time.isoformat()
                         await redis_client.hset("HS:DATA:{}".format(data_key), time_str, data_value)
                         await redis_client.rpush("LST:DATA_TIME:{}".format(data_key), time_str)
-                        # if check_result != 'OK':
-                        #     warn_msg = json.dumps(
-                        #         {'warn_msg': check_result, 'device_id': self.device_id, 'term_id': term_item['term_id'],
-                        #          'item_id': term_item['item_id'], 'time': data_time, 'value': data_value})
-                        #     await redis_client.publish('CHANNEL:WARNING', warn_msg)
                     rst = await redis_client.publish(pub_channel, json_data)
                     logger.debug('pub to %s, val=%s, rst=%s', pub_channel, json_data, rst)
         except Exception as e:

@@ -7,6 +7,7 @@ import redis
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.protocols.iec104.frame import *
 from pydatacoll.utils import str_to_number
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('MockIEC104')
 
@@ -16,9 +17,8 @@ class IEC104Device(asyncio.Protocol):
     frame_list = defaultdict(list)
 
     def __init__(self):
-        self.coll_interval = datetime.timedelta(minutes=15)
         self.io_loop = None
-        self.redis = redis.StrictRedis(db=1, decode_responses=True)
+        self.redis = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
         self.device_info = None
         self.active = False
         self.online = False
@@ -325,6 +325,7 @@ class IEC104Device(asyncio.Protocol):
 
 
 def run_server():
+    print('mock device running.')
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     server_list = []
@@ -335,8 +336,14 @@ def run_server():
         loop.run_forever()
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        logger.error('run failed: %s', repr(e), exc_info=True)
     finally:
+        for server in server_list:
+            server.close()
+            loop.run_until_complete(server.wait_closed())
         loop.close()
+    print('mock device stopped.')
 
 if __name__ == '__main__':
     run_server()

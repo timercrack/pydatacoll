@@ -13,7 +13,7 @@ class IEC104Device(BaseDevice):
     def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop,
                  redis_pool: aioredis.RedisPool):
         super(IEC104Device, self).__init__(device_info, io_loop, redis_pool)
-        self.coll_interval = datetime.timedelta(minutes=15)
+        self.coll_interval = datetime.timedelta(minutes=config.getint('IEC104', 'coll_interval', fallback=15))
         self.coll_count = 0
         self.ssn = 0
         self.rsn = 0

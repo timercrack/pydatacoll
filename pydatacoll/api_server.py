@@ -2,6 +2,7 @@ import argparse
 import pkgutil
 from collections import defaultdict
 import sys
+from multiprocessing import Process
 try:
     import ujson as json
 except ImportError:
@@ -11,37 +12,43 @@ import functools
 import aioredis
 from aiohttp import web
 import redis
-
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.json_response import JSON
 from pydatacoll.resources.protocol import *
 from pydatacoll.resources.redis_key import *
 from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
 from pydatacoll import plugins
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('APIServer')
-HANDLER_TIME_OUT = 10
+HANDLER_TIME_OUT = config.getint('SERVER', 'web_timeout', fallback=10)
 
 
 class APIServer(ParamFunctionContainer):
-    def __init__(self, port, io_loop: asyncio.AbstractEventLoop = None,
+    def __init__(self, port: int = None, production: bool = None, io_loop: asyncio.AbstractEventLoop = None,
                  redis_pool: aioredis.RedisPool = None):
         super().__init__()
-        self.port = port
+        self.port = port or config.getint('SERVER', 'web_port', fallback=8080)
         self.io_loop = io_loop
         if self.io_loop is None:
             self.io_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.io_loop)
         self._redis_pool = redis_pool
         self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-                functools.partial(aioredis.create_pool, ('localhost', 6379),
-                                  db=1, minsize=5, maxsize=10, encoding='utf-8')())
-        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+                functools.partial(aioredis.create_pool, (config.get('REDIS', 'host', fallback='127.0.0.1'),
+                                                         config.getint('REDIS', 'port', fallback=6379)),
+                                  db=config.getint('REDIS', 'db', fallback=1),
+                                  minsize=config.getint('REDIS', 'minsize', fallback=5),
+                                  maxsize=config.getint('REDIS', 'maxsize', fallback=10),
+                                  encoding=config.get('REDIS', 'encoding', fallback='utf-8'))())
+        self.redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
         self.web_app = web.Application()
         self._add_router()
         self.web_handler = self.web_app.make_handler()
-        self.web_server = self.io_loop.run_until_complete(self.io_loop.create_server(self.web_handler, '127.0.0.1', port))
+        self.web_server = self.io_loop.run_until_complete(
+                self.io_loop.create_server(self.web_handler, '127.0.0.1', self.port))
         self.plugin_list = list()
+        self.single_process = production or config.getboolean('SERVER', 'single_process', fallback=True)
         self._install_plugins()
         logger.info('ApiServer started, listening on port %s', self.port)
 
@@ -51,13 +58,18 @@ class APIServer(ParamFunctionContainer):
 
     def _install_plugins(self):
         try:
+            plugin_list = [item.strip() for item in config.get('SERVER', 'plugins').split(',')]
             for loader, module_name, is_pkg in pkgutil.iter_modules(plugins.__path__):
-                if module_name not in sys.modules:  # prevent load twice
+                if module_name in plugin_list and module_name not in sys.modules:  # prevent load twice
                     loader.find_module(module_name).load_module(module_name)
             for plugin_class in plugins.BaseModule.__subclasses__():
                 if not hasattr(plugin_class, 'not_implemented'):
-                    plugin = plugin_class(self.io_loop, self.redis_pool)
-                    self.io_loop.run_until_complete(plugin.install())
+                    if self.single_process:
+                        plugin = plugin_class(self.io_loop, self.redis_pool)
+                        self.io_loop.run_until_complete(plugin.install())
+                    else:
+                        plugin = Process(plugin_class.run)
+                        plugin.start()
                     self.plugin_list.append(plugin)
             logger.info("%s plugins founded: %s",
                         len(self.plugin_list), [type(plugin).__name__ for plugin in self.plugin_list])
@@ -66,7 +78,8 @@ class APIServer(ParamFunctionContainer):
 
     def _uninstall_plugins(self):
         for plugin in self.plugin_list:
-            self.io_loop.run_until_complete(plugin.uninstall())
+            if self.single_process:
+                self.io_loop.run_until_complete(plugin.uninstall())
 
     def stop_server(self):
         self._uninstall_plugins()
@@ -801,14 +814,21 @@ class APIServer(ParamFunctionContainer):
             return web.Response(status=400, text=repr(e))
 
 
-def run_server(port=8080):
-    api_server = APIServer(port)
-    logger.info('serving on %s', api_server.web_server.sockets[0].getsockname())
-    asyncio.get_event_loop().run_forever()
-
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
-    parser.add_argument('-p', '--port', type=int, default=8080, help='http listening port, default: 8080')
-    args = parser.parse_args()
-    run_server(args.port)
+    api_server = None
+    try:
+        parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
+        parser.add_argument('--port', type=int, default=8080, help='http listening port, default: 8080')
+        parser.add_argument('--production', action='store_true', help='run in production environment')
+        args = parser.parse_args()
+        api_server = APIServer(port=args.port, production=args.production)
+        logger.info('serving on %s', api_server.web_server.sockets[0].getsockname())
+        print('server is running.')
+        asyncio.get_event_loop().run_forever()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.info('got error: %s', repr(e), exc_info=True)
+    finally:
+        api_server and api_server.stop_server()
+    print('server is stopped.')

@@ -11,6 +11,7 @@ import numpy as np
 import pydatacoll.utils.logger as my_logger
 import pydatacoll.plugins.formula_calc as formula_calc
 from test.mock_device import mock_data
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('FormulaCalcTest')
 
@@ -20,7 +21,7 @@ class FormulaCalcTest(asynctest.TestCase):
 
     def setUp(self):
         super(FormulaCalcTest, self).setUp()
-        self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
+        self.redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
         mock_data.generate()
         self.formula_calc = formula_calc.FormulaCalc(self.loop)
         self.loop.run_until_complete(self.formula_calc.install())
@@ -30,10 +31,7 @@ class FormulaCalcTest(asynctest.TestCase):
 
     async def test_formula(self):
         time_str1 = datetime.datetime.now().isoformat()
-        pub_data = {
-            'device_id': 1, 'term_id': 10, 'item_id': 1000,
-            'time': time_str1, 'value': 123.4,
-        }
+        pub_data = {'device_id': 1, 'term_id': 10, 'item_id': 1000, 'time': time_str1, 'value': 123.4}
         self.redis_client.rpush('LST:DATA_TIME:1:10:1000', time_str1)
         self.redis_client.hset('HS:DATA:1:10:1000', time_str1, 123.4)
         self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:1000', json.dumps(pub_data))
@@ -43,10 +41,7 @@ class FormulaCalcTest(asynctest.TestCase):
         self.redis_client.hset('HS:DATA:1:10:1000', time_str2, 123.4)
         self.redis_client.publish('CHANNEL:DEVICE_DATA:1:10:1000', json.dumps(pub_data))
         time_str3 = datetime.datetime.now().isoformat()
-        pub_data = {
-            'device_id': 2, 'term_id': 30, 'item_id': 1000,
-            'time': time_str3, 'value': 999,
-        }
+        pub_data = {'device_id': 2, 'term_id': 30, 'item_id': 1000, 'time': time_str3, 'value': 999}
         self.redis_client.rpush('LST:DATA_TIME:2:30:1000', time_str3)
         self.redis_client.hset('HS:DATA:2:30:1000', time_str3, 999)
         self.redis_client.publish('CHANNEL:DEVICE_DATA:2:30:1000', json.dumps(pub_data))
