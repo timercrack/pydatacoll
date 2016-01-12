@@ -1,6 +1,7 @@
 import unittest
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.func_container import ParamFunctionContainer, param_function
+from pydatacoll.utils import str_to_number
 
 logger = my_logger.get_logger('UtilTest')
 
@@ -26,3 +27,8 @@ class UtilTest(unittest.TestCase):
         api = MyAPI(1, 2, 3)
         self.assertDictEqual(api.module_arg_dict, {'api_device_list': {'method': 'GET', 'url': '/devices'},
                                                    'api_new_device': {'method': 'POST', 'url': '/devices_new'}})
+
+    def test_str_to_number(self):
+        self.assertEqual(str(1.1), str(str_to_number('1.1')))
+        self.assertEqual(str(1), str(str_to_number('1')))
+        self.assertEqual(str(1), str(str_to_number(1)))

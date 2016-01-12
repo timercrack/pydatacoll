@@ -1,9 +1,11 @@
 import redis
+import sys
 
 
 def prepare_data(device_count=100, term_count=100, item_count=100):
-    print('preparing data...')
+    print('cleaning data...')
     s = redis.StrictRedis(db=1, decode_responses=True)
+    print('prepare new data...')
     s.flushdb()
     for item_id in range(item_count):
         s.hmset('HS:ITEM:{}'.format(item_id), {'id': item_id, 'name': '测试指标{}'.format(item_id)})
@@ -33,8 +35,9 @@ def prepare_data(device_count=100, term_count=100, item_count=100):
                 s.hmset('HS:TERM_ITEM:{}:{}'.format(term_id, item_id), term_item)
                 s.hmset('HS:MAPPING:IEC104:{}:{}'.format(device_id, term_item['protocol_code']), term_item)
                 s.sadd('SET:TERM_ITEM:{}'.format(term_id), item_id)
-        print('{}%'.format(device_id * 100 / device_count))
+            sys.stdout.write("\r%02d%%" % (term_id * 100 / term_count))
+            sys.stdout.flush()
     print('done!')
 
 if __name__ == '__main__':
-    prepare_data(100, 10, 10)
+    prepare_data(1, 100, 100)

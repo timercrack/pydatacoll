@@ -69,12 +69,7 @@ class InterfaceTest(asynctest.TestCase):
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         mock_data.generate()
         self.server_list = list()
-        for device in mock_data.device_list:
-            if 'port' not in device:
-                continue
-            self.server_list.append(
-                self.loop.run_until_complete(
-                        self.loop.create_server(iec104device.IEC104Device, '127.0.0.1', device['port'])))
+        self.server_list = iec104device.create_servers(self.loop)
         self.api_server = api_server.APIServer(io_loop=self.loop, port=8080)
 
     def tearDown(self):

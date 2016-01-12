@@ -68,7 +68,7 @@ class APIServer(ParamFunctionContainer):
                         plugin = plugin_class(self.io_loop, self.redis_pool)
                         self.io_loop.run_until_complete(plugin.install())
                     else:
-                        plugin = Process(plugin_class.run)
+                        plugin = Process(target=plugin_class.run)
                         plugin.start()
                     self.plugin_list.append(plugin)
             logger.info("%s plugins founded: %s",
@@ -827,8 +827,8 @@ if __name__ == '__main__':
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         pass
-    except Exception as e:
-        logger.info('got error: %s', repr(e), exc_info=True)
+    except Exception as ee:
+        logger.info('got error: %s', repr(ee), exc_info=True)
     finally:
         api_server and api_server.stop_server()
     print('server is stopped.')
