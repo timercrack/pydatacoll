@@ -54,6 +54,7 @@ CREATE TABLE test_db_save(
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8
 """)
         self.conn.commit()
+        self.conn.close()
         self.server_list = create_servers(self.loop)
         self.api_server = api_server.APIServer(io_loop=self.loop, port=8080)
         logger.info('begin load test..')
@@ -67,8 +68,8 @@ CREATE TABLE test_db_save(
 
     async def test_heavy_load(self):
         device_count = 1
-        term_count = 100
-        item_count = 100
+        term_count = 10
+        item_count = 10
         device_list = []
         term_list = []
         item_list = []
@@ -145,6 +146,8 @@ CREATE TABLE test_db_save(
         self.assertEqual(device.coll_count, 2)
         gc.collect()
         self.assertEqual(len(gc.garbage), 0)
-        self.cursor.execute("SELECT COUNT(*) FROM test_db_save")
-        rst = self.cursor.fetchall()
+        self.conn = pymysql.Connect(**db_save.PLUGIN_PARAM)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM test_db_save")
+        rst = cursor.fetchall()
         self.assertGreater(rst[0][0], device_count * term_count * item_count * 2)

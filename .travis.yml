@@ -18,7 +18,12 @@ install:
   - pip install -r requirements.txt
   - pip install coveralls
 
-cache: pip
+cache:
+  directories:
+  - $HOME/.cache/pip
+
+before_cache:
+  - rm -f $HOME/.cache/pip/log/debug.log
 
 script:
   - coverage run -m unittest
