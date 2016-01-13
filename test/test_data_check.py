@@ -24,13 +24,13 @@ class DataCheckTest(asynctest.TestCase):
         self.cursor.execute("DROP TABLE IF EXISTS test_data_check")
         self.cursor.execute("""
 CREATE TABLE test_data_check(
-  id int AUTO_INCREMENT PRIMARY KEY,
-  device_id int,
-  term_id int,
-  item_id int,
-  time datetime,
-  value float,
-  warn_msg varchar(1000)
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  device_id VARCHAR(32),
+  term_id VARCHAR(32),
+  item_id VARCHAR(32),
+  time DATETIME,
+  value FLOAT,
+  warn_msg VARCHAR(1000)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8
 """)
         self.conn.commit()
@@ -40,14 +40,14 @@ CREATE TABLE test_data_check(
         self.loop.run_until_complete(self.db_saver.install())
 
     def tearDown(self):
-        self.conn.close()
         self.loop.run_until_complete(self.db_saver.uninstall())
+        self.conn.close()
 
     async def test_data_check(self):
         term_item = {
             'term_id': 10, 'item_id': 20, 'protocol_code': 100, 'code_type': 36, 'down_limit': 50, 'up_limit': 100,
             'db_warn_sql': "insert into test_data_check(device_id,term_id,item_id,time,value,warn_msg) VALUES "
-                           "({PARAM.device_id},{PARAM.term_id},{PARAM.item_id},'{PARAM.time}',{PARAM.value},"
+                           "('{PARAM.device_id}','{PARAM.term_id}','{PARAM.item_id}','{PARAM.time}',{PARAM.value},"
                            "'{PARAM.warn_msg}')",
             'warn_msg': 'value error!',
             'do_verify': 'param.down_limit <= value <= param.up_limit',

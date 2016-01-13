@@ -24,11 +24,13 @@ def prepare_data(device_count=100, term_count=100, item_count=100):
                     'id': item_id, 'device_id': device_id, 'term_id': term_id, 'item_id': item_id,
                     'protocol_code': term_id*100+item_id, 'code_type': 36, 'base_val': 0, 'coefficient': 1,
                     'down_limit': 100, 'up_limit': 1000,
-                    'db_save_sql': "insert into test_db_save(device_id,term_id,item_id,time,value) VALUES"
-                                   "({PARAM.device_id},{PARAM.term_id},{PARAM.item_id},'{PARAM.time}',{PARAM.value})",
-                    'db_warn_sql': "insert into test_data_check(device_id,term_id,item_id,time,value,warn_msg) VALUES"
-                                   "({PARAM.device_id},{PARAM.term_id},{PARAM.item_id},'{PARAM.time}',{PARAM.value},"
-                                   "'{PARAM.warn_msg}')",
+                    'db_save_sql':
+                        "insert into test_db_save(device_id,term_id,item_id,time,value) VALUES"
+                        "('{PARAM.device_id}','{PARAM.term_id}','{PARAM.item_id}','{PARAM.time}',{PARAM.value})",
+                    'db_warn_sql':
+                        "insert into test_data_check(device_id,term_id,item_id,time,value,warn_msg) VALUES"
+                        "('{PARAM.device_id}','{PARAM.term_id}','{PARAM.item_id}','{PARAM.time}',{PARAM.value},"
+                        "'{PARAM.warn_msg}')",
                     'warn_msg': 'value error!',
                     'do_verify': 'param.down_limit <= value <= str(900)'
                 }

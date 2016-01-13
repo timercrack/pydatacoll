@@ -41,7 +41,6 @@ class IEC104Device:
         self.test_act_handler = None
         self.term_item_list = []
         self.log_frame = config.getboolean('IEC104', 'log_frame', fallback=True)
-        print('log_frame=', self.log_frame)
         self.receive_handler = self.io_loop.create_task(self.receive())
         self.k_decreased = asyncio.futures.Future(loop=self.io_loop)
         logger.debug('mock device server start, device=%s', device)
@@ -382,7 +381,7 @@ def create_servers(io_loop):
     return server_list
 
 
-if __name__ == '__main__':
+def run_server():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     servers = create_servers(loop)
@@ -399,3 +398,6 @@ if __name__ == '__main__':
             loop.run_until_complete(server.wait_closed())
         loop.close()
     print('mock device stopped.')
+
+if __name__ == '__main__':
+    run_server()

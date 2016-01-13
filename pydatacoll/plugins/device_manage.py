@@ -13,12 +13,11 @@ class DeviceManager(BaseModule):
 
     async def start(self):
         try:
-            with (await self.redis_pool) as redis_client:
-                device_dict = await redis_client.smembers('SET:DEVICE')
-                for device_id in device_dict:
-                    device_dict = await redis_client.hgetall('HS:DEVICE:{}'.format(device_id))
-                    if device_dict:
-                        await self.add_device(None, device_dict)
+            device_dict = self.redis_client.smembers('SET:DEVICE')
+            for device_id in device_dict:
+                device_dict = self.redis_client.hgetall('HS:DEVICE:{}'.format(device_id))
+                if device_dict:
+                    await self.add_device(None, device_dict)
         except Exception as ee:
             logger.error('init_devices failed: %s', repr(ee), exc_info=True)
 
@@ -45,7 +44,7 @@ class DeviceManager(BaseModule):
                 module = importlib.import_module('pydatacoll.protocols.{}.device'.format(protocol))
                 protocol_class = self.protocol_dict[protocol] = getattr(module, '{}Device'.format(protocol.upper()))
                 logger.info('fresh_device new protocol registered: %s ', protocol_class.__name__)
-            self.device_dict[device_id] = protocol_class(device_dict, self.io_loop, self.redis_pool)
+            self.device_dict[device_id] = protocol_class(device_dict, self.io_loop)
         except Exception as ee:
             logger.error('fresh_device failed: %s', repr(ee), exc_info=True)
 

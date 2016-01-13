@@ -1,5 +1,4 @@
 import asyncio
-import aioredis
 
 from pydatacoll.protocols import BaseDevice
 import pydatacoll.utils.logger as my_logger
@@ -8,9 +7,8 @@ logger = my_logger.get_logger('FORMULADevice')
 
 
 class FORMULADevice(BaseDevice):
-    def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop,
-                 redis_pool: aioredis.RedisPool):
-        super(FORMULADevice, self).__init__(device_info, io_loop, redis_pool)
+    def __init__(self, device_info: dict, io_loop: asyncio.AbstractEventLoop):
+        super(FORMULADevice, self).__init__(device_info, io_loop)
 
     def disconnect(self, reconnect=False):
         pass

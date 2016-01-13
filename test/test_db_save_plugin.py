@@ -24,12 +24,12 @@ class DBSaverTest(asynctest.TestCase):
         self.cursor.execute("DROP TABLE IF EXISTS test_db_save")
         self.cursor.execute("""
 CREATE TABLE test_db_save(
-  id int AUTO_INCREMENT PRIMARY KEY,
-  device_id int,
-  term_id int,
-  item_id int,
-  time datetime,
-  value float
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  device_id VARCHAR(32),
+  term_id VARCHAR(32),
+  item_id VARCHAR(32),
+  time DATETIME,
+  value FLOAT
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8
 """)
         self.conn.commit()
@@ -46,7 +46,7 @@ CREATE TABLE test_db_save(
         self.redis_client.hmset('HS:TERM_ITEM:10:20', {
             'term_id': 10, 'item_id': 20, 'protocol_code': 100, 'code_type': 36,
             'db_save_sql': "insert into test_db_save(device_id,term_id,item_id,time,value) VALUES "
-                           "({PARAM.device_id},{PARAM.term_id},{PARAM.item_id},'{PARAM.time}',{PARAM.value})"
+                           "('{PARAM.device_id}','{PARAM.term_id}','{PARAM.item_id}','{PARAM.time}',{PARAM.value})"
         })
         pub_data = {
             'device_id': 1, 'term_id': 10, 'item_id': 20,

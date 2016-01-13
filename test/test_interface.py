@@ -2,7 +2,6 @@ import asyncio
 import aiohttp
 import aioredis
 import asynctest
-import functools
 import redis
 try:
     import ujson as json
@@ -162,7 +161,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['1', '2', '3'])
+            self.assertSetEqual(set(rst), {'1', '2', '3'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -211,7 +210,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['10', '20', '30', '40'])
+            self.assertSetEqual(set(rst), {'10', '20', '30', '40'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -223,7 +222,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['10', '20'])
+            self.assertSetEqual(set(rst), {'10', '20'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99/terms') as r:
             self.assertEqual(r.status, 404)
             rst = await r.text()
@@ -275,7 +274,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/items') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['1000', '2000'])
+            self.assertSetEqual(set(rst), {'1000', '2000'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/items/1000') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
@@ -287,7 +286,7 @@ name 'p2' is not defined
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10/items') as r:
             self.assertEqual(r.status, 200)
             rst = await r.json()
-            self.assertSequenceEqual(rst, ['1000', '2000'])
+            self.assertSetEqual(set(rst), {'1000', '2000'})
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/99/items') as r:
             self.assertEqual(r.status, 404)
             rst = await r.text()
