@@ -19,7 +19,6 @@ from test.mock_device.iec104device import run_server
 logger = my_logger.get_logger('LoadTest')
 
 
-@asynctest.skip
 class LoadTest(asynctest.TestCase):
     loop = asyncio.get_event_loop()  # make pycharm happy
 
