@@ -1,7 +1,7 @@
 import asyncio
-import functools
 from abc import abstractmethod, ABCMeta
 import aioredis
+import redis
 
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.func_container import ParamFunctionContainer
@@ -11,20 +11,16 @@ logger = my_logger.get_logger('BaseModule')
 
 
 class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
-    def __init__(self, io_loop: asyncio.AbstractEventLoop = None,
-                 redis_pool: aioredis.RedisPool = None):
+    def __init__(self, io_loop: asyncio.AbstractEventLoop = None):
         super().__init__()
         self.io_loop = io_loop or asyncio.get_event_loop()
-        self._redis_pool = redis_pool
-        self.redis_pool = redis_pool or self.io_loop.run_until_complete(
-                functools.partial(aioredis.create_pool, (config.get('REDIS', 'host', fallback='localhost'),
-                                                         config.getint('REDIS', 'port', fallback=6379)),
-                                  db=config.getint('REDIS', 'db', fallback=1),
-                                  minsize=config.getint('REDIS', 'minsize', fallback=5),
-                                  maxsize=config.getint('REDIS', 'maxsize', fallback=10),
-                                  encoding=config.get('REDIS', 'encoding', fallback='utf-8'))())
+        self.sub_client = self.io_loop.run_until_complete(
+                aioredis.create_redis((config.get('REDIS', 'host', fallback='localhost'),
+                                       config.getint('REDIS', 'port', fallback=6379)),
+                                      db=config.getint('REDIS', 'db', fallback=1)))
+        self.redis_client = redis.StrictRedis(db=config.getint('REDIS', 'db', fallback=1), decode_responses=True)
         self.initialized = False
-        self.sub_client = None
+        self.sub_tasks = list()
         self.sub_channels = list()
         self.channel_router = dict()
         self._register_channel()
@@ -38,10 +34,9 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
 
     async def install(self):
         try:
-            self.sub_client = await self.redis_pool.acquire()
             self.sub_channels = await self.sub_client.psubscribe(*[a['channel'] for a in self.module_arg_dict.values()])
             for channel in self.sub_channels:
-                asyncio.ensure_future(self._msg_reader(channel), loop=self.io_loop)
+                self.sub_tasks.append(asyncio.ensure_future(self._msg_reader(channel), loop=self.io_loop))
             await self.start()
             self.initialized = True
             logger.info('%s plugin installed', type(self).__name__)
@@ -52,9 +47,9 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
         try:
             await self.stop()
             await self.sub_client.punsubscribe(*[a['channel'] for a in self.module_arg_dict.values()])
-            self.redis_pool.release(self.sub_client)
-            if self._redis_pool is None:  # release the pool created by self
-                await self.redis_pool.clear()
+            # await asyncio.wait(self.sub_tasks, loop=self.io_loop)
+            self.sub_tasks.clear()
+            self.sub_client.close()
             self.initialized = False
             logger.info('%s plugin uninstalled', type(self).__name__)
         except Exception as e:
@@ -91,3 +86,9 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
         finally:
             loop.run_until_complete(plugin.uninstall())
         loop.close()
+
+available_plugins = {
+    'device_manage': 'DeviceManager',
+    'db_save': 'DBSaver',
+    'formula_calc': 'FormulaCalc',
+}

@@ -24,7 +24,7 @@ test_device = {'id': '4', 'name': '测试集中器4', 'ip': '127.0.0.1', 'port':
 test_term = {'id': '90', 'name': '测试终端9', 'address': '99', 'identify': 'term90',
              'protocol': 'dlt645', 'device_id': '1'}
 test_item = {'id': '3000', 'name': 'C相电压', 'view_code': '3000', 'func_type': '遥测量'}
-test_term_item = {'id': '9', 'term_id': '20', 'item_id': '2000', 'protocol_code': '400',
+test_term_item = {'device_id': '1', 'term_id': '20', 'item_id': '2000', 'protocol_code': '400',
                   'base_val': '0', 'coefficient': '1'}
 
 formula1 = {'id': '1', 'formula': 'max(p1[-1], p2[-1])', 'device_id': '3', 'term_id': '40', 'item_id': '1000',
@@ -48,15 +48,15 @@ term_list = [term10, term20, term30, term40]
 item1000 = {'id': '1000', 'name': 'A相电压', 'view_code': '1000', 'func_type': '遥测量'}
 item2000 = {'id': '2000', 'name': '继电器开关', 'view_code': '2000', 'func_type': '遥控量'}
 item_list = [item1000, item2000]
-term10_item1000 = {'id': '1', 'term_id': '10', 'item_id': '1000', 'protocol_code': '100', 'code_type': '36',
+term10_item1000 = {'device_id': '1', 'term_id': '10', 'item_id': '1000', 'protocol_code': '100', 'code_type': '36',
                    'base_val': '0', 'coefficient': '1', 'down_limit': '220', 'up_limit': '230'}
-term10_item2000 = {'id': '2', 'term_id': '10', 'item_id': '2000', 'protocol_code': '200', 'code_type': '63',
+term10_item2000 = {'device_id': '1', 'term_id': '10', 'item_id': '2000', 'protocol_code': '200', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
-term20_item1000 = {'id': '3', 'term_id': '20', 'item_id': '1000', 'protocol_code': '300', 'code_type': '63',
+term20_item1000 = {'device_id': '1', 'term_id': '20', 'item_id': '1000', 'protocol_code': '300', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
-term30_item1000 = {'id': '4', 'term_id': '30', 'item_id': '1000', 'protocol_code': '100', 'code_type': '63',
+term30_item1000 = {'device_id': '2', 'term_id': '30', 'item_id': '1000', 'protocol_code': '100', 'code_type': '63',
                    'base_val': '0', 'coefficient': '1'}
-term40_item1000 = {'id': '5', 'term_id': '40', 'item_id': '1000',
+term40_item1000 = {'device_id': '3', 'term_id': '40', 'item_id': '1000',
                    'base_val': '0', 'coefficient': '1'}
 term_item_list = [term10_item1000, term10_item2000, term20_item1000, term30_item1000, term40_item1000]
 device1_term10_item1000 = {

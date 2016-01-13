@@ -33,11 +33,12 @@ REDIS_KEY = {
         },
         "HS:TERM_ITEM:{term_id}:{item_id}": {
             # 必填
-            'id': '主键',
             'term_id': '终端ID',
             'item_id': '指标ID',
             # 可选
-            'protocol_code': '协议代码',
+            'device_id': '设备ID',  # for v2 api
+            'protocol': '协议, 值=DEVICE_PROTOCOLS',  # for v2 api
+            'protocol_code': '协议代码',  # for v2 api
             'base_val': '基值',
             'coefficient': '系数',
             'db_save_sql': '数据库存储SQL',

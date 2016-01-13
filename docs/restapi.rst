@@ -26,6 +26,7 @@ POST     /api/v1/devices
 POST     /api/v1/items
 POST     /api/v1/terms
 POST     /api/v1/terms/{term_id}/items
+POST     /api/v2/term_items
 PUT      /api/v1/devices/{device_id}
 PUT      /api/v1/items/{item_id}
 PUT      /api/v1/terms/{term_id}
