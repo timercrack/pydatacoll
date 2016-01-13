@@ -4,7 +4,6 @@ import asynctest
 import aiohttp
 import pymysql
 import redis
-from multiprocessing import Process
 
 try:
     import ujson as json
@@ -14,7 +13,7 @@ import pydatacoll.utils.logger as my_logger
 from pydatacoll import api_server
 from pydatacoll.plugins import db_save
 from pydatacoll.plugins.device_manage import DeviceManager
-from test.mock_device.iec104device import run_server
+from test.mock_device.iec104device import create_servers
 
 logger = my_logger.get_logger('LoadTest')
 
@@ -26,6 +25,9 @@ class LoadTest(asynctest.TestCase):
         logger.info('prepare data..')
         self.redis_client = redis.StrictRedis(db=1, decode_responses=True)
         self.redis_client.flushdb()
+        self.redis_client.hmset('HS:DEVICE:0', {'id': 0, 'name': '测试集中器0', 'ip': '127.0.0.1',
+                                                'port': 2404, 'protocol': 'iec104'})
+        self.redis_client.sadd('SET:DEVICE', 0)
         self.conn = pymysql.Connect(**db_save.PLUGIN_PARAM)
         self.cursor = self.conn.cursor()
         self.cursor.execute("DROP TABLE IF EXISTS test_data_check")
@@ -52,12 +54,14 @@ CREATE TABLE test_db_save(
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8
 """)
         self.conn.commit()
+        self.server_list = create_servers(self.loop)
         self.api_server = api_server.APIServer(io_loop=self.loop, port=8080)
-        self.mock_server = Process(target=run_server)
         logger.info('begin load test..')
 
     def tearDown(self):
-        self.mock_server.terminate()
+        for server in self.server_list:
+            server.close()
+            self.loop.run_until_complete(server.wait_closed())
         self.api_server.stop_server()
         self.conn.close()
 
@@ -73,8 +77,6 @@ CREATE TABLE test_db_save(
         for item_id in range(item_count):
             item_list.append({'id': item_id, 'name': '测试指标{}'.format(item_id)})
         for device_id in range(device_count):
-            device_list.append({'id': device_id, 'name': '测试集中器{}'.format(device_id), 'ip': '127.0.0.1',
-                                'port': device_id + 2404, 'protocol': 'iec104'})
             device_list.append({'id': 'F{}'.format(device_id), 'name': '测试公式设备F{}'.format(device_id),
                                 'protocol': 'formula'})
             for term_id in range(term_count):
@@ -114,6 +116,9 @@ CREATE TABLE test_db_save(
                                          'device_id': 'F{}'.format(device_id), 'term_id': 'F{}'.format(term_id),
                                          'item_id': '{}'.format(item_id)})
         logger.info('create device..')
+        self.redis_client.publish(
+                'CHANNEL:DEVICE_ADD', json.dumps({'id': 0, 'name': '测试集中器0', 'ip': '127.0.0.1',
+                                                  'port': 2404, 'protocol': 'iec104'}))
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/devices', data=json.dumps(device_list)) as r:
             self.assertEqual(r.status, 200)
         logger.info('create term..')
@@ -129,7 +134,6 @@ CREATE TABLE test_db_save(
         async with aiohttp.post('http://127.0.0.1:8080/api/v2/term_items', data=json.dumps(term_item_list)) as r:
             self.assertEqual(r.status, 200)
         logger.info('done.')
-        self.mock_server.start()
         device = DeviceManager.device_dict['0']
         await device.data_link_established
         await device.run_task()
@@ -143,4 +147,4 @@ CREATE TABLE test_db_save(
         self.assertEqual(len(gc.garbage), 0)
         self.cursor.execute("SELECT COUNT(*) FROM test_db_save")
         rst = self.cursor.fetchall()
-        self.assertGreater(rst[0][0], device_count*term_count*item_count*2)
+        self.assertGreater(rst[0][0], device_count * term_count * item_count * 2)

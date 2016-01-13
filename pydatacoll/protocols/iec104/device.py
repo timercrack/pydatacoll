@@ -181,10 +181,10 @@ class IEC104Device(BaseDevice):
             elif self.reconnect_handler:
                 logger.info("device[%s] closed manually, try reconnect..", self.device_id)
             else:
-                logger.warn("device[%s] closed by server, try reconnect..", self.device_id)
+                logger.warning("device[%s] closed by server, try reconnect..", self.device_id)
                 self.disconnect(reconnect=True)
         except ConnectionResetError:
-            logger.warn("device[%s] remote server shutdown, try reconnect..", self.device_id)
+            logger.warning("device[%s] remote server shutdown, try reconnect..", self.device_id)
             self.disconnect(reconnect=True)
         except Exception as e:
             logger.error("device[%s] receive failed: %s, try reconnect..", self.device_id, repr(e), exc_info=True)
