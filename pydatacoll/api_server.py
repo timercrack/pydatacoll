@@ -345,7 +345,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('del_formula failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
-    @param_function(method='DELETE', url=r'/api/v2/formulas')
+    @param_function(method='POST', url=r'/api/v2/formulas/del')
     async def del_formula_batch(self, request):
         try:
             formula_data = await self._read_data(request)
@@ -450,7 +450,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('del_device failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
-    @param_function(method='DELETE', url=r'/api/v2/devices')
+    @param_function(method='POST', url=r'/api/v2/devices/del')
     async def del_device_batch(self, request):
         try:
             devices_data = await self._read_data(request)
@@ -573,7 +573,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('del_term failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
-    @param_function(method='DELETE', url=r'/api/v2/terms')
+    @param_function(method='POST', url=r'/api/v2/terms/del')
     async def del_term_batch(self, request):
         try:
             term_data = await self._read_data(request)
@@ -688,7 +688,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('del_item failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
-    @param_function(method='DELETE', url=r'/api/v2/items')
+    @param_function(method='POST', url=r'/api/v2/items/del')
     async def del_item_batch(self, request):
         try:
             item_data = await self._read_data(request)
@@ -833,7 +833,7 @@ class APIServer(ParamFunctionContainer):
             logger.error('del_term_item failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
-    @param_function(method='DELETE', url=r'/api/v2/term_items')
+    @param_function(method='POST', url=r'/api/v2/term_items/del')
     async def del_term_item_batch(self, request):
         try:
             term_item_data = await self._read_data(request)

@@ -158,7 +158,7 @@ name 'p2' is not defined
 """)
 
         formulas = [1]
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/formulas', data=json.dumps(formulas)) as r:
+        async with aiohttp.post('http://127.0.0.1:8080/api/v2/formulas/del', data=json.dumps(formulas)) as r:
             self.assertEqual(r.status, 200)
             rst = self.redis_client.smembers('SET:FORMULA')
             self.assertEqual(len(rst), 0)
@@ -213,7 +213,7 @@ name 'p2' is not defined
             self.assertFalse(rst)
 
         devices = [1, 2, 3]
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/devices', data=json.dumps(devices)) as r:
+        async with aiohttp.post('http://127.0.0.1:8080/api/v2/devices/del', data=json.dumps(devices)) as r:
             self.assertEqual(r.status, 200)
             rst = self.redis_client.smembers('SET:DEVICE')
             self.assertEqual(len(rst), 0)
@@ -283,7 +283,7 @@ name 'p2' is not defined
             self.assertFalse(rst)
 
         terms = [10, 20, 30, 40]
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/terms', data=json.dumps(terms)) as r:
+        async with aiohttp.post('http://127.0.0.1:8080/api/v2/terms/del', data=json.dumps(terms)) as r:
             self.assertEqual(r.status, 200)
             rst = self.redis_client.smembers('SET:TERM')
             self.assertEqual(len(rst), 0)
@@ -346,7 +346,7 @@ name 'p2' is not defined
             self.assertFalse(rst)
 
         items = [1000, 2000]
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/items', data=json.dumps(items)) as r:
+        async with aiohttp.post('http://127.0.0.1:8080/api/v2/items/del', data=json.dumps(items)) as r:
             self.assertEqual(r.status, 200)
             rst = self.redis_client.smembers('SET:ITEM')
             self.assertEqual(len(rst), 0)
@@ -427,7 +427,7 @@ name 'p2' is not defined
             self.assertFalse(rst)
         del mock_data.test_term_item['device_id']
 
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/term_items',
+        async with aiohttp.post('http://127.0.0.1:8080/api/v2/term_items/del',
                                   data=json.dumps(mock_data.term_item_list)) as r:
             self.assertEqual(r.status, 200)
             rst = list(self.redis_client.scan_iter('HS:TERM_ITEMS:*'))

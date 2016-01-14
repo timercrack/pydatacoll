@@ -350,11 +350,11 @@ class IEC104Device:
                 down_limit = term_item_dict.get('down_limit')
                 value = None
                 if up_limit:
-                    value = random.uniform(float(down_limit), float(up_limit))
+                    value = random.randint(str_to_number(down_limit), str_to_number(up_limit))
                 frame = iec_104.init_frame(self.ssn, self.rsn, TYP(typ), Cause.introgen)
                 frame.ASDU.StartAddress = address
                 frame.ASDU.data[0].address = address
-                frame.ASDU.data[0].value = value or random.uniform(100, 200)
+                frame.ASDU.data[0].value = value or random.randint(100, 200)
                 if hasattr(frame.ASDU.data[0], 'cp56time2a'):
                     frame.ASDU.data[0].cp56time2a = datetime.datetime.now()
                 if hasattr(frame.ASDU.data[0], 'cp24time2a'):
