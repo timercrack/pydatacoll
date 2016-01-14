@@ -68,8 +68,8 @@ CREATE TABLE test_db_save(
 
     async def test_heavy_load(self):
         device_count = 1
-        term_count = 10
-        item_count = 10
+        term_count = 100
+        item_count = 100
         device_list = []
         term_list = []
         item_list = []
