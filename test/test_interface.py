@@ -157,6 +157,12 @@ class InterfaceTest(asynctest.TestCase):
 name 'p2' is not defined
 """)
 
+        formulas = [1]
+        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/formulas', data=json.dumps(formulas)) as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.smembers('SET:FORMULA')
+            self.assertEqual(len(rst), 0)
+
     async def test_device_CRUD(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices') as r:
             self.assertEqual(r.status, 200)
@@ -205,6 +211,12 @@ name 'p2' is not defined
             self.assertFalse(rst)
             rst = self.redis_client.sismember('SET:DEVICE', 5)
             self.assertFalse(rst)
+
+        devices = [1, 2, 3]
+        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/devices', data=json.dumps(devices)) as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.smembers('SET:DEVICE')
+            self.assertEqual(len(rst), 0)
 
     async def test_term_CRUD(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms') as r:
@@ -270,6 +282,12 @@ name 'p2' is not defined
             rst = self.redis_client.sismember('SET:TERM', 50)
             self.assertFalse(rst)
 
+        terms = [10, 20, 30, 40]
+        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/terms', data=json.dumps(terms)) as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.smembers('SET:TERM')
+            self.assertEqual(len(rst), 0)
+
     async def test_item_CRUD(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/items') as r:
             self.assertEqual(r.status, 200)
@@ -326,6 +344,12 @@ name 'p2' is not defined
             self.assertFalse(rst)
             rst = self.redis_client.sismember('SET:ITEM', 4000)
             self.assertFalse(rst)
+
+        items = [1000, 2000]
+        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/items', data=json.dumps(items)) as r:
+            self.assertEqual(r.status, 200)
+            rst = self.redis_client.smembers('SET:ITEM')
+            self.assertEqual(len(rst), 0)
 
     async def test_get_data(self):
         async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas') as r:
@@ -402,6 +426,12 @@ name 'p2' is not defined
             rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
             self.assertFalse(rst)
         del mock_data.test_term_item['device_id']
+
+        async with aiohttp.delete('http://127.0.0.1:8080/api/v2/term_items',
+                                  data=json.dumps(mock_data.term_item_list)) as r:
+            self.assertEqual(r.status, 200)
+            rst = list(self.redis_client.scan_iter('HS:TERM_ITEMS:*'))
+            self.assertEqual(len(rst), 0)
 
     async def test_device_call(self):
         call_dict = {'device_id': '1', 'term_id': '10', 'item_id': 1000}
