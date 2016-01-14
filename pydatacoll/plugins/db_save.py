@@ -26,9 +26,12 @@ class DBSaver(BaseModule):
     # not_implemented = True
     interp = Interpreter(use_numpy=False)
     conn = None
+    cursor = None
 
     async def start(self):
         self.conn = self.conn or pymysql.Connect(**PLUGIN_PARAM)
+        self.conn.autocommit(True)
+        self.cursor = self.conn.cursor()
 
     async def stop(self):
         self.conn and self.conn.close()
@@ -49,21 +52,17 @@ class DBSaver(BaseModule):
                     last_value = self.redis_client.hget('HS:DATA:{}:{}:{}'.format(
                             param.device_id, param.term_id, param.item_id), last_key)
                 if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
-                    cur = self.conn.cursor()
                     sql = term_item['db_save_sql'].format(PARAM=param)
                     logger.debug('save_mysql: save data, sql=%s', sql)
-                    cur.execute(sql)
-                    self.conn.commit()
+                    self.cursor.execute(sql)
             if term_item and 'do_verify' in term_item and 'db_warn_sql' in term_item:
                 self.interp.symtable['param'] = param
                 self.interp.symtable['value'] = str(param.value)
                 check_rst = self.interp(param.do_verify)
                 if not check_rst:
-                    cur = self.conn.cursor()
                     sql = term_item['db_warn_sql'].format(PARAM=param)
                     logger.debug('save_mysql: save alert, sql=%s', sql)
-                    cur.execute(sql)
-                    self.conn.commit()
+                    self.cursor.execute(sql)
         except Exception as ee:
             logger.error('save_mysql failed: %s', repr(ee), exc_info=True)
 
