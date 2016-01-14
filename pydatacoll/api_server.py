@@ -277,14 +277,31 @@ class APIServer(ParamFunctionContainer):
     async def create_formula(self, request):
         try:
             formula_data = await self._read_data(request)
+            formula_dict = json.loads(formula_data)
+            logger.debug('new formula arg=%s', formula_dict)
+            found = self.redis_client.exists('HS:FORMULA:{}'.format(formula_dict['id']))
+            if found:
+                return web.Response(status=409, text='formula already exists!')
+            self.redis_client.hmset('HS:FORMULA:{}'.format(formula_dict['id']), formula_dict)
+            self.redis_client.sadd('SET:FORMULA', formula_dict['id'])
+            for param, param_value in formula_dict.items():
+                if param.startswith('p'):
+                    self.redis_client.sadd('SET:FORMULA_PARAM:{}'.format(param_value), formula_dict['id'])
+            self.redis_client.publish('CHANNEL:FORMULA_ADD', json.dumps(formula_dict))
+            return web.Response()
+        except Exception as e:
+            logger.error('create_formula failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='POST', url=r'/api/v2/formulas')
+    async def create_formula_batch(self, request):
+        try:
+            formula_data = await self._read_data(request)
             formula_list = json.loads(formula_data)
             if type(formula_list) != list:
                 formula_list = [formula_list]
             for formula_dict in formula_list:
                 logger.debug('new formula arg=%s', formula_dict)
-                found = self.redis_client.exists('HS:FORMULA:{}'.format(formula_dict['id']))
-                if found:
-                    return web.Response(status=409, text='formula already exists!')
                 self.redis_client.hmset('HS:FORMULA:{}'.format(formula_dict['id']), formula_dict)
                 self.redis_client.sadd('SET:FORMULA', formula_dict['id'])
                 for param, param_value in formula_dict.items():
@@ -293,7 +310,7 @@ class APIServer(ParamFunctionContainer):
                 self.redis_client.publish('CHANNEL:FORMULA_ADD', json.dumps(formula_dict))
             return web.Response()
         except Exception as e:
-            logger.error('create_formula failed: %s', repr(e), exc_info=True)
+            logger.error('create_formula_batch failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='PUT', url=r'/api/v1/formulas/{formula_id}')
@@ -354,14 +371,28 @@ class APIServer(ParamFunctionContainer):
     async def create_device(self, request):
         try:
             device_data = await self._read_data(request)
+            device_dict = json.loads(device_data)
+            logger.debug('new device arg=%s', device_dict)
+            found = self.redis_client.exists('HS:DEVICE:{}'.format(device_dict['id']))
+            if found:
+                return web.Response(status=409, text='device already exists!')
+            self.redis_client.hmset('HS:DEVICE:{}'.format(device_dict['id']), device_dict)
+            self.redis_client.sadd('SET:DEVICE', device_dict['id'])
+            self.redis_client.publish('CHANNEL:DEVICE_ADD', json.dumps(device_dict))
+            return web.Response()
+        except Exception as e:
+            logger.error('create_device failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='POST', url=r'/api/v2/devices')
+    async def create_device_batch(self, request):
+        try:
+            device_data = await self._read_data(request)
             device_list = json.loads(device_data)
             if type(device_list) != list:
                 device_list = [device_list]
             for device_dict in device_list:
                 logger.debug('new device arg=%s', device_dict)
-                found = self.redis_client.exists('HS:DEVICE:{}'.format(device_dict['id']))
-                if found:
-                    return web.Response(status=409, text='device already exists!')
                 self.redis_client.hmset('HS:DEVICE:{}'.format(device_dict['id']), device_dict)
                 self.redis_client.sadd('SET:DEVICE', device_dict['id'])
                 self.redis_client.publish('CHANNEL:DEVICE_ADD', json.dumps(device_dict))
@@ -456,21 +487,36 @@ class APIServer(ParamFunctionContainer):
     async def create_term(self, request):
         try:
             term_data = await self._read_data(request)
+            term_dict = json.loads(term_data)
+            logger.debug('new term arg=%s', term_dict)
+            found = self.redis_client.exists('HS:TERM:{}'.format(term_dict['id']))
+            if found:
+                return web.Response(status=409, text='term already exists!')
+            self.redis_client.hmset('HS:TERM:{}'.format(term_dict['id']), term_dict)
+            self.redis_client.sadd('SET:TERM', term_dict['id'])
+            self.redis_client.sadd('SET:DEVICE_TERM:{}'.format(term_dict['device_id']), term_dict['id'])
+            self.redis_client.publish('CHANNEL:TERM_ADD"', json.dumps(term_dict))
+            return web.Response()
+        except Exception as e:
+            logger.error('create_term failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='POST', url=r'/api/v2/terms')
+    async def create_term_batch(self, request):
+        try:
+            term_data = await self._read_data(request)
             term_list = json.loads(term_data)
             if type(term_list) != list:
                 term_list = [term_list]
             for term_dict in term_list:
                 logger.debug('new term arg=%s', term_dict)
-                found = self.redis_client.exists('HS:TERM:{}'.format(term_dict['id']))
-                if found:
-                    return web.Response(status=409, text='term already exists!')
                 self.redis_client.hmset('HS:TERM:{}'.format(term_dict['id']), term_dict)
                 self.redis_client.sadd('SET:TERM', term_dict['id'])
                 self.redis_client.sadd('SET:DEVICE_TERM:{}'.format(term_dict['device_id']), term_dict['id'])
                 self.redis_client.publish('CHANNEL:TERM_ADD"', json.dumps(term_dict))
             return web.Response()
         except Exception as e:
-            logger.error('create_term failed: %s', repr(e), exc_info=True)
+            logger.error('create_term_batch failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='PUT', url=r'/api/v1/terms/{term_id}')
@@ -565,19 +611,32 @@ class APIServer(ParamFunctionContainer):
     async def create_item(self, request):
         try:
             item_data = await self._read_data(request)
+            item_dict = json.loads(item_data)
+            logger.debug('new item arg=%s', item_dict)
+            found = self.redis_client.exists('HS:ITEM:{}'.format(item_dict['id']))
+            if found:
+                return web.Response(status=409, text='item already exists!')
+            self.redis_client.hmset('HS:ITEM:{}'.format(item_dict['id']), item_dict)
+            self.redis_client.sadd('SET:ITEM', item_dict['id'])
+            return web.Response()
+        except Exception as e:
+            logger.error('create_item failed: %s', repr(e), exc_info=True)
+            return web.Response(status=400, text=repr(e))
+
+    @param_function(method='POST', url=r'/api/v2/items')
+    async def create_item_batch(self, request):
+        try:
+            item_data = await self._read_data(request)
             item_list = json.loads(item_data)
             if type(item_list) != list:
                 item_list = [item_list]
             for item_dict in item_list:
                 logger.debug('new item arg=%s', item_dict)
-                found = self.redis_client.exists('HS:ITEM:{}'.format(item_dict['id']))
-                if found:
-                    return web.Response(status=409, text='item already exists!')
                 self.redis_client.hmset('HS:ITEM:{}'.format(item_dict['id']), item_dict)
                 self.redis_client.sadd('SET:ITEM', item_dict['id'])
             return web.Response()
         except Exception as e:
-            logger.error('create_item failed: %s', repr(e), exc_info=True)
+            logger.error('create_item_batch failed: %s', repr(e), exc_info=True)
             return web.Response(status=400, text=repr(e))
 
     @param_function(method='PUT', url=r'/api/v1/items/{item_id}')
@@ -959,6 +1018,8 @@ if __name__ == '__main__':
         api_server = APIServer(port=args.port, production=args.production)
         logger.info('serving on %s', api_server.web_server.sockets[0].getsockname())
         print('server is running.')
+        print('used config file:', config_file)
+        print('log stored in:', app_dir.user_log_dir)
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         pass
