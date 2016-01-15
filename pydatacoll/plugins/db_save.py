@@ -1,5 +1,6 @@
 from collections import namedtuple
 import math
+import datetime
 try:
     import ujson as json
 except ImportError:
@@ -27,6 +28,7 @@ class DBSaver(BaseModule):
     interp = Interpreter(use_numpy=False)
     conn = None
     cursor = None
+    save_unchanged = config.getboolean('DBSaver', 'save_unchanged', fallback=False)
 
     async def start(self):
         self.conn = self.conn or pymysql.Connect(**PLUGIN_PARAM)
@@ -35,6 +37,28 @@ class DBSaver(BaseModule):
 
     async def stop(self):
         self.conn and self.conn.close()
+
+    @param_function(channel='CHANNEL:SQL_CHECK')
+    async def check_sql(self, channel, data_dict):
+        check_rst = 'OK'
+        try:
+            logger.debug('check_sql: got msg, channel=%s, dat_dict=%s', channel, data_dict)
+            term_item = self.redis_client.hgetall('HS:TERM_ITEM:{}:{}'.format(
+                    data_dict['term_id'], data_dict['item_id']))
+            data_dict.update(term_item)
+            param = namedtuple('Param', data_dict.keys())(**data_dict)
+            if 'db_save_sql' not in data_dict and 'db_warn_sql' not in data_dict:
+                check_rst = 'not found sql to check'
+            if 'db_save_sql' in data_dict:
+                self.cursor.execute(param.db_save_sql.format(PARAM=param))
+            if 'db_warn_sql' in data_dict:
+                self.cursor.execute(param.db_warn_sql.format(PARAM=param))
+        except Exception as ee:
+            check_rst = ee.args[0]
+        finally:
+            pub_ch = "CHANNEL:SQL_CHECK_RESULT:{}".format(len(repr(data_dict)))
+            logger.debug('check_sql: publish check result to %s', pub_ch)
+            self.redis_client.publish(pub_ch, check_rst)
 
     @param_function(channel='CHANNEL:DEVICE_DATA:*')
     async def save_mysql(self, channel, data_dict):
@@ -51,7 +75,8 @@ class DBSaver(BaseModule):
                 if last_key:
                     last_value = self.redis_client.hget('HS:DATA:{}:{}:{}'.format(
                             param.device_id, param.term_id, param.item_id), last_key)
-                if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
+                if not last_value or self.save_unchanged or \
+                        not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                     sql = term_item['db_save_sql'].format(PARAM=param)
                     logger.debug('save_mysql: save data, sql=%s', sql)
                     self.cursor.execute(sql)

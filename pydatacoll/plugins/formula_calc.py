@@ -14,6 +14,7 @@ import pandas as pd
 from pydatacoll.plugins import BaseModule
 from pydatacoll.utils.func_container import param_function
 import pydatacoll.utils.logger as my_logger
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('FormulaCalc')
 
@@ -23,6 +24,7 @@ class FormulaCalc(BaseModule):
     formula_dict = dict()  # HS:TERM_ITEM:{term_id}:{item_id} -> value of HS:FORMULA:{formula_id}
     pandas_dict = dict()  # HS:DATA:{formula_id}:{term_id}:{item_id} -> pandas.Series
     interp = Interpreter(use_numpy=False)
+    calc_unchanged = config.getboolean('FormulaCalc', 'calc_unchanged', fallback=False)
 
     async def start(self):
         try:
@@ -70,7 +72,7 @@ class FormulaCalc(BaseModule):
         if formula_id is None:
             self.formula_dict.clear()
         else:
-            self.formula_dict.pop(formula_id)
+            self.formula_dict.pop(str(formula_id))
 
     @param_function(channel='CHANNEL:DEVICE_DATA:*')
     async def param_update(self, channel: bytes, data_dict: dict):
@@ -90,7 +92,8 @@ class FormulaCalc(BaseModule):
                     last_value = self.redis_client.hget(data_dict_key, last_key)
                 else:
                     logger.debug("not found data in %s", data_time_key)
-                if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
+                if not last_value or self.calc_unchanged or \
+                        not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                     self.pandas_dict[partial_key][pd.to_datetime(param.time)] = float(param.value)
                     logger.debug('%s value=%s,last_value=%s changed, calculate formula',
                                  data_dict_key, param.value, last_value)
@@ -145,7 +148,7 @@ class FormulaCalc(BaseModule):
     async def formula_check(self, _, check_dict: dict):
         try:
             check_rst = self.do_check(**check_dict)
-            pub_ch = "CHANNEL:FORMULA_CHECK_RESULT:{}".format(len(check_dict['formula']))
+            pub_ch = "CHANNEL:FORMULA_CHECK_RESULT:{}".format(len(repr(check_dict)))
             self.redis_client.publish(pub_ch, check_rst)
         except Exception as ee:
             logger.error('param_update failed: %s', repr(ee), exc_info=True)
@@ -161,16 +164,20 @@ class FormulaCalc(BaseModule):
             ts = pd.Series(np.random.randn(10), index=pd.date_range(start='1/1/2016', periods=10))
             for param, param_value in check_dict.items():
                 if param.startswith('p'):
+                    device_id, term_id, item_id = param_value.split(':')
+                    test_id = self.redis_client.hget('HS:TERM_ITEM:{}:{}'.format(
+                        term_id, item_id), 'device_id')
+                    if not test_id or test_id != device_id:
+                        raise Exception('parameter not found: %s=%s' % (param, param_value))
                     interp.symtable[param] = ts
             value = interp(check_dict['formula'])
             if len(interp.error) > 0:
                 rst = output.getvalue()
             elif not isinstance(value, Number) and not isinstance(value, pd.Series):
                 rst = "result type must be Number or Series!"
-
         except Exception as ee:
-            logger.error('do_check failed: %s', repr(ee), exc_info=True)
-            rst = repr(ee)
+            logger.info('do_check failed: %s', repr(ee), exc_info=True)
+            rst = ee.args[0]
         finally:
             return rst
 
