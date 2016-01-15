@@ -14,6 +14,7 @@ import pandas as pd
 from pydatacoll.plugins import BaseModule
 from pydatacoll.utils.func_container import param_function
 import pydatacoll.utils.logger as my_logger
+from pydatacoll.utils.read_config import *
 
 logger = my_logger.get_logger('FormulaCalc')
 
@@ -23,6 +24,7 @@ class FormulaCalc(BaseModule):
     formula_dict = dict()  # HS:TERM_ITEM:{term_id}:{item_id} -> value of HS:FORMULA:{formula_id}
     pandas_dict = dict()  # HS:DATA:{formula_id}:{term_id}:{item_id} -> pandas.Series
     interp = Interpreter(use_numpy=False)
+    calc_unchanged = config.getboolean('FormulaCalc', 'calc_unchanged', fallback=False)
 
     async def start(self):
         try:
@@ -90,7 +92,8 @@ class FormulaCalc(BaseModule):
                     last_value = self.redis_client.hget(data_dict_key, last_key)
                 else:
                     logger.debug("not found data in %s", data_time_key)
-                if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
+                if not last_value or self.calc_unchanged or \
+                        not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                     self.pandas_dict[partial_key][pd.to_datetime(param.time)] = float(param.value)
                     logger.debug('%s value=%s,last_value=%s changed, calculate formula',
                                  data_dict_key, param.value, last_value)

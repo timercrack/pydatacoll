@@ -27,6 +27,7 @@ class DBSaver(BaseModule):
     interp = Interpreter(use_numpy=False)
     conn = None
     cursor = None
+    save_unchanged = config.getboolean('DBSaver', 'save_unchanged', fallback=False)
 
     async def start(self):
         self.conn = self.conn or pymysql.Connect(**PLUGIN_PARAM)
@@ -51,7 +52,8 @@ class DBSaver(BaseModule):
                 if last_key:
                     last_value = self.redis_client.hget('HS:DATA:{}:{}:{}'.format(
                             param.device_id, param.term_id, param.item_id), last_key)
-                if not last_value or not math.isclose(param.value, float(last_value), rel_tol=1e-04):
+                if not last_value or self.save_unchanged or \
+                        not math.isclose(param.value, float(last_value), rel_tol=1e-04):
                     sql = term_item['db_save_sql'].format(PARAM=param)
                     logger.debug('save_mysql: save data, sql=%s', sql)
                     self.cursor.execute(sql)

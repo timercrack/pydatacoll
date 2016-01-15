@@ -1,6 +1,5 @@
 import argparse
 from collections import defaultdict
-from multiprocessing import Process
 import importlib
 
 try:
@@ -1006,15 +1005,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
     parser.add_argument('--port', type=int, help='http listening port, default: 8080')
     parser.add_argument('--production', action='store_true', help='run in production environment')
-    parser.add_argument('--memory_test', action='store_true', help='detect memory leaks')
+    parser.add_argument('--memory-test', action='store_true', help='detect memory leaks')
+    parser.add_argument('--mock-iec104', action='store_true', help='run iec104 mock server in sub-process')
     args = parser.parse_args()
     snapshot1 = None
+    iec104_server = None
     try:
         if args.memory_test:
             import tracemalloc
 
             tracemalloc.start()
             snapshot1 = tracemalloc.take_snapshot()
+        if args.mock_iec104:
+            from test.mock_device.iec104device import run_server
+            from multiprocessing import Process
+            iec104_server = Process(target=run_server)
+            iec104_server.start()
         api_server = APIServer(port=args.port, production=args.production)
         logger.info('serving on %s', api_server.web_server.sockets[0].getsockname())
         print('server is running.')
@@ -1027,6 +1033,7 @@ if __name__ == '__main__':
         logger.info('got error: %s', repr(ee), exc_info=True)
     finally:
         api_server and api_server.stop_server()
+        iec104_server and iec104_server.terminate()
     print('server is stopped.')
     if args.memory_test:
         snapshot2 = tracemalloc.take_snapshot()

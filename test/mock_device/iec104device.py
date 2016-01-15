@@ -43,7 +43,7 @@ class IEC104Device:
         self.log_frame = config.getboolean('IEC104', 'log_frame', fallback=True)
         self.receive_handler = self.io_loop.create_task(self.receive())
         self.k_decreased = asyncio.futures.Future(loop=self.io_loop)
-        logger.debug('mock device server start, device=%s', device)
+        logger.info('mock device server start, device=%s', device)
 
     async def receive(self):
         try:
