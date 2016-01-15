@@ -1004,7 +1004,7 @@ class APIServer(ParamFunctionContainer):
 if __name__ == '__main__':
     api_server = None
     parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
-    parser.add_argument('--port', type=int, default=8080, help='http listening port, default: 8080')
+    parser.add_argument('--port', type=int, help='http listening port, default: 8080')
     parser.add_argument('--production', action='store_true', help='run in production environment')
     parser.add_argument('--memory_test', action='store_true', help='detect memory leaks')
     args = parser.parse_args()
