@@ -1,7 +1,6 @@
 import argparse
 from collections import defaultdict
 import importlib
-
 try:
     import ujson as json
 except ImportError:
@@ -974,7 +973,7 @@ class APIServer(ParamFunctionContainer):
             formula_data = await self._read_data(request)
             formula_dict = json.loads(formula_data)
             logger.debug('formula_check arg=%s', formula_dict)
-            channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(formula_dict['formula']))
+            channel_name = 'CHANNEL:FORMULA_CHECK_RESULT:{}'.format(len(repr(formula_dict)))
             res = await sub_client.subscribe(channel_name)
             cb = asyncio.futures.Future(loop=self.io_loop)
 
@@ -999,6 +998,41 @@ class APIServer(ParamFunctionContainer):
                 sub_client.close()
             return web.Response(status=400, text=repr(e))
 
+    @param_function(method='POST', url=r'/api/v1/sql_check')
+    async def sql_check(self, request):
+        sub_client = None
+        channel_name = None
+        try:
+            sub_client = await aioredis.create_redis((config.get('REDIS', 'host', fallback='localhost'),
+                                                      config.getint('REDIS', 'port', fallback=6379)),
+                                                     db=config.getint('REDIS', 'db', fallback=1))
+            term_item_data = await self._read_data(request)
+            term_item_dict = json.loads(term_item_data)
+            logger.debug('sql_check arg=%s', term_item_dict)
+            channel_name = 'CHANNEL:SQL_CHECK_RESULT:{}'.format(len(repr(term_item_dict)))
+            res = await sub_client.subscribe(channel_name)
+            cb = asyncio.futures.Future(loop=self.io_loop)
+
+            async def reader(ch):
+                while await ch.wait_message():
+                    msg = await ch.get(encoding='utf-8')
+                    if not cb.done():
+                        cb.set_result(msg)
+
+            tsk = asyncio.ensure_future(reader(res[0]), loop=self.io_loop)
+            self.redis_client.publish('CHANNEL:SQL_CHECK', term_item_data)
+            rst = await asyncio.wait_for(cb, HANDLER_TIME_OUT, loop=self.io_loop)
+            await sub_client.unsubscribe(channel_name)
+            sub_client.close()
+            await tsk
+            return web.Response(status=200, text=rst)
+        except Exception as e:
+            logger.exception(e)
+            logger.error('sql_check failed: %s', repr(e), exc_info=True)
+            if sub_client and sub_client.in_pubsub and channel_name:
+                await sub_client.unsubscribe(channel_name)
+                sub_client.close()
+            return web.Response(status=400, text=repr(e))
 
 if __name__ == '__main__':
     api_server = None

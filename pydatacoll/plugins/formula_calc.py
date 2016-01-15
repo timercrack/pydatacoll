@@ -148,7 +148,7 @@ class FormulaCalc(BaseModule):
     async def formula_check(self, _, check_dict: dict):
         try:
             check_rst = self.do_check(**check_dict)
-            pub_ch = "CHANNEL:FORMULA_CHECK_RESULT:{}".format(len(check_dict['formula']))
+            pub_ch = "CHANNEL:FORMULA_CHECK_RESULT:{}".format(len(repr(check_dict)))
             self.redis_client.publish(pub_ch, check_rst)
         except Exception as ee:
             logger.error('param_update failed: %s', repr(ee), exc_info=True)
@@ -164,16 +164,20 @@ class FormulaCalc(BaseModule):
             ts = pd.Series(np.random.randn(10), index=pd.date_range(start='1/1/2016', periods=10))
             for param, param_value in check_dict.items():
                 if param.startswith('p'):
+                    device_id, term_id, item_id = param_value.split(':')
+                    test_id = self.redis_client.hget('HS:TERM_ITEM:{}:{}'.format(
+                        term_id, item_id), 'device_id')
+                    if not test_id or test_id != device_id:
+                        raise Exception('parameter not found: %s=%s' % (param, param_value))
                     interp.symtable[param] = ts
             value = interp(check_dict['formula'])
             if len(interp.error) > 0:
                 rst = output.getvalue()
             elif not isinstance(value, Number) and not isinstance(value, pd.Series):
                 rst = "result type must be Number or Series!"
-
         except Exception as ee:
-            logger.error('do_check failed: %s', repr(ee), exc_info=True)
-            rst = repr(ee)
+            logger.info('do_check failed: %s', repr(ee), exc_info=True)
+            rst = ee.args[0]
         finally:
             return rst
 

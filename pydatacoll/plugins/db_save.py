@@ -1,5 +1,6 @@
 from collections import namedtuple
 import math
+import datetime
 try:
     import ujson as json
 except ImportError:
@@ -36,6 +37,28 @@ class DBSaver(BaseModule):
 
     async def stop(self):
         self.conn and self.conn.close()
+
+    @param_function(channel='CHANNEL:SQL_CHECK')
+    async def check_sql(self, channel, data_dict):
+        check_rst = 'OK'
+        try:
+            logger.debug('check_sql: got msg, channel=%s, dat_dict=%s', channel, data_dict)
+            term_item = self.redis_client.hgetall('HS:TERM_ITEM:{}:{}'.format(
+                    data_dict['term_id'], data_dict['item_id']))
+            data_dict.update(term_item)
+            param = namedtuple('Param', data_dict.keys())(**data_dict)
+            if 'db_save_sql' not in data_dict and 'db_warn_sql' not in data_dict:
+                check_rst = 'not found sql to check'
+            if 'db_save_sql' in data_dict:
+                self.cursor.execute(param.db_save_sql.format(PARAM=param))
+            if 'db_warn_sql' in data_dict:
+                self.cursor.execute(param.db_warn_sql.format(PARAM=param))
+        except Exception as ee:
+            check_rst = ee.args[0]
+        finally:
+            pub_ch = "CHANNEL:SQL_CHECK_RESULT:{}".format(len(repr(data_dict)))
+            logger.debug('check_sql: publish check result to %s', pub_ch)
+            self.redis_client.publish(pub_ch, check_rst)
 
     @param_function(channel='CHANNEL:DEVICE_DATA:*')
     async def save_mysql(self, channel, data_dict):

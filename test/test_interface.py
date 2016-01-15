@@ -142,7 +142,7 @@ class InterfaceTest(asynctest.TestCase):
             rst = self.redis_client.sismember('SET:FORMULA', 5)
             self.assertFalse(rst)
 
-        formula_check = {'formula': 'p1[-1]+10', 'p1': 'HS:DATA:1:10:1000'}
+        formula_check = {'formula': 'p1[-1]+10', 'p1': '1:10:1000'}
         async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
             self.assertEqual(r.status, 200)
             rst = await r.text()
@@ -156,6 +156,12 @@ class InterfaceTest(asynctest.TestCase):
            ^^^
 name 'p2' is not defined
 """)
+
+        formula_check['p1'] = '123:45:6'
+        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.text()
+            self.assertEqual(rst, "parameter not found: p1=123:45:6")
 
         formulas = [1]
         async with aiohttp.post('http://127.0.0.1:8080/api/v2/formulas/del', data=json.dumps(formulas)) as r:
@@ -446,3 +452,10 @@ name 'p2' is not defined
             self.assertEqual(r.status, 200)
             rst = await r.json()
             self.assertAlmostEqual(rst['value'], 123.4, delta=0.0001)
+
+    async def test_sql_check(self):
+        async with aiohttp.post('http://127.0.0.1:8080/api/v1/sql_check',
+                                data=json.dumps(mock_data.term10_item1000)) as r:
+            self.assertEqual(r.status, 200)
+            rst = await r.text()
+            self.assertEqual(rst, 'not found sql to check')
