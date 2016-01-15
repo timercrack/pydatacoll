@@ -72,7 +72,7 @@ class FormulaCalc(BaseModule):
         if formula_id is None:
             self.formula_dict.clear()
         else:
-            self.formula_dict.pop(formula_id)
+            self.formula_dict.pop(str(formula_id))
 
     @param_function(channel='CHANNEL:DEVICE_DATA:*')
     async def param_update(self, channel: bytes, data_dict: dict):
