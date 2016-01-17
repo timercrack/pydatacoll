@@ -64,11 +64,10 @@ class IEC104Test(unittest.TestCase):
 
     def test_build_C_CI_NA1(self):
         c = iec_104.init_frame(116, 3, TYP.C_CI_NA_1)
-        c.ASDU.SourceAddress = 40
+        c.ASDU.Cause = Cause.actterm
         c.ASDU.GlobalAddress = 1
         c.ASDU.data[0].RQT = 5
         frame = iec_104.build_isu(c)  # 使用 build_isu 组装I帧
-        # print "built C_CI_NA1 frame=%s" % frame.encode('hex')
         self.assertEqual(frame, i_bin)
 
     def test_build_C_SE_TC_1(self):
@@ -86,13 +85,13 @@ class IEC104Test(unittest.TestCase):
         # print("parse=", frame)
         self.assertEqual(frame.ASDU.data[0].cp56time2a, time)
         frame = iec_104.init_frame(13, 3, TYP.M_SP_TB_1)
-        frame.ASDU.SourceAddress = 12
+        frame.ASDU.Cause = Cause.spont
         frame.ASDU.GlobalAddress = 1
         frame.ASDU.data[0].address = 8
         frame.ASDU.data[0].cp56time2a = time
         build = iec_104.build_isu(frame)
         # print("build=", build.hex())
-        # print("soe_bin=", soe_bin.hex())
+        # print("soe  =", soe_bin.hex())
         self.assertEqual(build, soe_bin)
 
     def test_parse_big(self):
@@ -105,7 +104,7 @@ class IEC104Test(unittest.TestCase):
         frame = iec_104.parse(i_big)
         # print('parse=', frame)
         c = iec_104.init_frame(frame.APCI1, frame.APCI2, frame.ASDU.TYP, sq_count=frame.ASDU.sq_count)
-        c.ASDU.SourceAddress = frame.ASDU.SourceAddress
+        c.ASDU.Cause = frame.ASDU.Cause
         c.ASDU.GlobalAddress = frame.ASDU.GlobalAddress
         for idx in range(frame.ASDU.sq_count):
             c.ASDU.data[idx].address = frame.ASDU.data[idx].address
@@ -117,7 +116,7 @@ class IEC104Test(unittest.TestCase):
         self.assertEqual(re_build, i_big)
 
     def test_build_asdu(self):
-        cc = Container(TYP=TYP.C_CI_NA_1, sq=0, sq_count=1, T=0, PN=0, SourceAddress=0,
+        cc = Container(TYP=TYP.C_CI_NA_1, sq=0, sq_count=1,
                        StartAddress=0, Cause=Cause.actcon, GlobalAddress=1)
         cc.data = [Container(FRZ=0, RQT=0, address=1)]
         frame = ASDU_Part.build(cc)
