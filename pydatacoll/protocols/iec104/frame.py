@@ -716,9 +716,9 @@ ASDU_Part = Struct(
         ),
         # 传送原因 COT
         EmbeddedBitStruct(
+                Bits("SourceAddress", 8),  # 源发站地址 0 缺省值 1~255 源发站地址号
                 Bit("T"),  # 试验 0 未试验 1 试验
                 Bit("PN"),  # 0 肯定确认 1 否定确认
-                Bits("SourceAddress", 8),  # 源发站地址 0 缺省值 1~255 源发站地址号
                 ExprAdapter(Bits("Cause", 6), encoder=lambda obj, ctx: obj, decoder=lambda obj, ctx: Cause(obj)),
         ),
         # ASDU公共地址
