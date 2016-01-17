@@ -131,6 +131,7 @@ class IEC104Device(BaseDevice):
         try:
             self.receive_handler = None
             data = await self.reader.readexactly(2)
+            logger.debug('device[%s] recv frame head: %s', data.hex())
             head = iec_head.parse(data)
             data += await self.reader.readexactly(head.length)
             recv_time = datetime.datetime.now()

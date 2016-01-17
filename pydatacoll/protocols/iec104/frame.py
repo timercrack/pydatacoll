@@ -701,7 +701,7 @@ ASDU_C_RD_NA_1 = Struct(
 # 103 时钟同步命令
 ASDU_C_CS_NA_1 = Struct(
         "ASDU_C_CS_NA_1",
-        Padding(24),
+        Padding(3),
         cp56time2a,
 )
 
