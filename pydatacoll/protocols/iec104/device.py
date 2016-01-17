@@ -117,7 +117,9 @@ class IEC104Device(BaseDevice):
                      [frm.APCI1 if frm.APCI1 == 'S' or isinstance(frm.APCI1, UFrame) else
                       frm.ASDU.TYP for frm in self.send_list])
         if self.reconnect_handler is None:
-            self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
+            # self.reconnect_handler = self.io_loop.call_soon(lambda: self.io_loop.create_task(self.reconnect()))
+            logger.debug('device[%s] reconnect after 3 seconds', self.device_id)
+            self.disconnect(reconnect=True)
 
     def on_timer2(self):
         logger.debug('device[%s] T2 timeout, send S_frame(rsn=%s)', self.device_id, self.rsn)
@@ -125,13 +127,14 @@ class IEC104Device(BaseDevice):
 
     def on_timer3(self):
         logger.debug('device[%s] T3 timeout, send heartbeat', self.device_id)
-        self.test_act_handler = self.io_loop.create_task(self.send_frame(iec_104.init_frame(UFrame.TESTFR_ACT)))
+        if self.reconnect_handler is None:
+            self.test_act_handler = self.io_loop.create_task(self.send_frame(iec_104.init_frame(UFrame.TESTFR_ACT)))
 
     async def receive(self):
         try:
             self.receive_handler = None
             data = await self.reader.readexactly(2)
-            logger.debug('device[%s] recv frame head: %s', data.hex())
+            logger.debug('device[%s] recv frame head: %s', self.device_id, data.hex())
             head = iec_head.parse(data)
             data += await self.reader.readexactly(head.length)
             recv_time = datetime.datetime.now()
