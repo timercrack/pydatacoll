@@ -276,7 +276,8 @@ class IEC104Device(BaseDevice):
                     data_pairs.add((data_time, data_addr, data.value))
                 method = 'call' if frame.ASDU.Cause == Cause.req else \
                     'ctrl' if frame.ASDU.Cause == Cause.actcon else 'data'
-                logger.debug('device[%s] method=%s, data_pairs=%s', self.device_id, method, data_pairs)
+                logger.debug('device[%s] method=%s, data_pairs=%s', self.device_id, method, [
+                    "{time} {data[1]} {data[2]}".format(time=data[0].isoformat(),data=data) for data in data_pairs])
                 await self.process_data(data_pairs, method)
             elif frame.ASDU.Cause == Cause.actcon:
                 if TYP.C_SC_NA_1 <= frame.ASDU.TYP <= TYP.C_SE_TC_1 and frame.ASDU.data[0].se == 1:
@@ -428,7 +429,7 @@ class IEC104Device(BaseDevice):
         pass
 
     def prepare_call_frame(self, term_item_dict):
-        frame = iec_104.init_frame(self.ssn, self.rsn, TYP.C_RD_NA_1, Cause.act)  # 102 读命令
+        frame = iec_104.init_frame(self.ssn, self.rsn, TYP.C_RD_NA_1, Cause.req)  # 102 读命令
         frame.ASDU.data[0].address = int(term_item_dict['protocol_code'])
         return frame
 
