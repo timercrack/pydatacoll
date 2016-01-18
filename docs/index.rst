@@ -93,6 +93,10 @@ This documentation is also available in `PDF formats
    develop
    restapi
 
+License
+-------
+
+``PyDataColl`` is offered under the Apache 2 license.
 
 Indices and tables
 ==================

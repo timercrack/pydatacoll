@@ -256,7 +256,7 @@ class IEC104Device(BaseDevice):
             if self.w >= IECParam.W:
                 logger.debug("self.w,Param_S=%s, send S_frame", (self.w, IECParam.W.value))
                 await self.send_frame(iec_104.init_frame("S", self.rsn))
-            if frame.ASDU.Cause in (Cause.actcon, Cause.req):
+            if frame.ASDU.Cause in (Cause.actcon, Cause.req, Cause.actterm, Cause.deactcon):
                 self.stop_timer(IECParam.T1)
                 self.io_loop.create_task(self.check_to_send(frame))
             if frame.ASDU.Cause in (Cause.spont, Cause.introgen, Cause.reqcogen) or \
@@ -296,9 +296,12 @@ class IEC104Device(BaseDevice):
                         self.power_data_called.set_result(None)
             elif frame.ASDU.Cause == Cause.act:
                 logger.warning('device[%s] handle_i: act frame not allowed!', self.device_id)
+            elif frame.ASDU.Cause == Cause.deactcon:  # 停止激活确认
+                pass
             # 完成尚未实现的I帧
             else:
-                logger.error("device[%s] unknown I_frame: %s", self.device_id, frame)
+                logger.warning("device[%s] unknown I_frame: %s", self.device_id, frame)
+                self.io_loop.create_task(self.check_to_send(frame))
 
         except Exception as e:
             logger.error("device[%s] handle_i failed: %s", self.device_id, repr(e), exc_info=True)

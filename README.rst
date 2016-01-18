@@ -85,3 +85,8 @@ Quick links
 
 * `Source (github) <https://github.com/timercrack/pydatacoll>`_
 * `Docs <http://pydatacoll.readthedocs.org/>`_
+
+License
+-------
+
+``PyDataColl`` is offered under the Apache 2 license.
