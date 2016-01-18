@@ -658,18 +658,20 @@ ASDU_C_BO_TA_1 = Struct(
 ASDU_C_IC_NA_1 = Struct(
     "ASDU_C_IC_NA_1",
     EmbeddedBitStruct(BitField("address", 24, swapped=True)),  # 信息对象地址
-    ULInt8("QOI"),  # 0 未用 20 站召唤（总招） 21~36 第1~16组召唤
+    # ULInt8("QOI"),  # 0 未用 20 站召唤（总招） 21~36 第1~16组召唤
+    Magic(b"\x14"),
 )
 
 # 101 电能脉冲召唤命令
 ASDU_C_CI_NA_1 = Struct(
     "ASDU_C_CI_NA_1",
     EmbeddedBitStruct(BitField("address", 24, swapped=True)),  # 信息对象地址
-    EmbeddedBitStruct(
-        Bits("FRZ", 2),
-        # 0 读（无冻结复位） 1 计数量冻结不带复位（累加值） 2 冻结带复位（增量信息） 3 计数量复位
-        Bits("RQT", 6),  # 0 未用 1~4 请求1~4组计数量 5 请求总的计数量（总招）
-    ),
+    # EmbeddedBitStruct(
+    #     Bits("FRZ", 2),
+    #     # 0 读（无冻结复位） 1 计数量冻结不带复位（累加值） 2 冻结带复位（增量信息） 3 计数量复位
+    #     Bits("RQT", 6),  # 0 未用 1~4 请求1~4组计数量 5 请求总的计数量（总招）
+    # ),
+    Magic(b"\x05"),
 )
 
 # 102 读命令

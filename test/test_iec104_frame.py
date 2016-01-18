@@ -67,7 +67,7 @@ class IEC104Test(unittest.TestCase):
         c = iec_104.init_frame(i_frame.APCI1, i_frame.APCI2, TYP.C_CI_NA_1)
         c.ASDU.Cause = Cause.actterm
         c.ASDU.GlobalAddress = i_frame.ASDU.GlobalAddress
-        c.ASDU.data[0].RQT = i_frame.ASDU.data[0].RQT
+        # c.ASDU.data[0].RQT = i_frame.ASDU.data[0].RQT
         frame = iec_104.build_isu(c)  # 使用 build_isu 组装I帧
         self.assertEqual(frame, i_bin)
 
@@ -83,17 +83,17 @@ class IEC104Test(unittest.TestCase):
     def test_M_SP_TB_1(self):
         time = datetime.datetime(2005, 11, 26, 16, 28, 14, 765000)
         soe_frame = iec_104.parse(soe_bin)
-        print("parse=", soe_frame)
+        # print("parse=", soe_frame)
         self.assertEqual(soe_frame.ASDU.data[0].cp56time2a, time)
         frame = iec_104.init_frame(soe_frame.APCI1, soe_frame.APCI2, TYP.M_SP_TB_1)
         frame.ASDU.Cause = soe_frame.ASDU.Cause.spont
         frame.ASDU.GlobalAddress = soe_frame.ASDU.GlobalAddress
         frame.ASDU.data[0].address = soe_frame.ASDU.data[0].address
         frame.ASDU.data[0].cp56time2a = time
-        print('frame=', frame)
+        # print('frame=', frame)
         build = iec_104.build_isu(frame)
-        print("build=", build.hex())
-        print("soe  =", soe_bin.hex())
+        # print("build=", build.hex())
+        # print("soe  =", soe_bin.hex())
         self.assertEqual(build, soe_bin)
 
     def test_parse_big(self):
@@ -120,7 +120,7 @@ class IEC104Test(unittest.TestCase):
     def test_build_asdu(self):
         cc = Container(TYP=TYP.C_CI_NA_1, sq=0, sq_count=1,
                        StartAddress=0, Cause=Cause.actcon, GlobalAddress=1)
-        cc.data = [Container(FRZ=0, RQT=0, address=1)]
+        cc.data = [Container(address=1)]
         frame = ASDU_Part.build(cc)
         # print "built ASDU frame=%s" % frame.encode('hex')
         parse = ASDU_Part.parse(frame)
