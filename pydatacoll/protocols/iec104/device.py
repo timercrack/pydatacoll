@@ -342,7 +342,7 @@ class IEC104Device(BaseDevice):
                     self.send_list.append(frame)
             # send I
             else:
-                if check is False or not self.send_list or frame.ASDU.Cause not in (Cause.act,):
+                if check is False or not self.send_list or frame.ASDU.Cause not in (Cause.act, Cause.req):
                     self.stop_timer(IECParam.T2)
                     frame.APCI1 = self.ssn
                     frame.APCI2 = self.rsn
@@ -358,14 +358,15 @@ class IEC104Device(BaseDevice):
                     self.k += 1
                     self.w = 0
                     stream_write = True
-                    if frame.ASDU.Cause in (Cause.act,):
+                    if frame.ASDU.Cause in (Cause.act, Cause.req):
                         self.start_timer(IECParam.T1)
-                if check and frame.ASDU.Cause in (Cause.act,):
+                if check and frame.ASDU.Cause in (Cause.act, Cause.req):
                     self.send_list.append(frame)
             if stream_write:
                 logger.debug("device[%s] send_frame(%s): %s", self.device_id,
                              frame.APCI1 if frame.APCI1 == "S" or isinstance(frame.APCI1, UFrame) else
                              frame.ASDU.TYP, encode_frame.hex())
+                self.start_timer(IECParam.T3)  # the frame is successful sent, it means the link is OK, so restart T3
                 if self.log_frame:
                     self.io_loop.create_task(
                             self.save_frame(encode_frame, send=True, save_time=datetime.datetime.now()))

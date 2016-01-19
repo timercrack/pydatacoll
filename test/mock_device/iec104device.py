@@ -216,7 +216,7 @@ class IEC104Device:
                 logger.debug('device[%s] send task data end, ssn=%s', self.device_id, self.ssn)
             # 读命令
             elif frame.ASDU.TYP == TYP.C_RD_NA_1:
-                if frame.ASDU.Cause == Cause.act:
+                if frame.ASDU.Cause == Cause.req:
                     term_item_dict = self.redis.hgetall('HS:MAPPING:IEC104:{}:{}'.format(
                             self.device_id, frame.ASDU.data[0].address))
                     value = None
