@@ -118,14 +118,25 @@ class IEC104Test(unittest.TestCase):
         self.assertEqual(re_build, i_big)
 
     def test_build_asdu(self):
+        cc = Container(TYP=TYP.C_CI_NA_1, sq=0, sq_count=1, data=[Container(address=1)],
+                       StartAddress=0, Cause=Container(Cause=Cause.actcon, PN=1, T=1, SourceAddress=123), GlobalAddress=1)
+        frame = ASDU_Part.build(cc)
+        # print("built ASDU frame=%s" % frame.hex())
+        parse = ASDU_Part.parse(frame)
+        # print('parse =', parse)
+        re_build = ASDU_Part.build(parse)
+        # print("rebuilt ASDU frame=%s" % re_build.hex())
+        self.assertEqual(frame, re_build)
+
         cc = Container(TYP=TYP.C_CI_NA_1, sq=0, sq_count=1,
                        StartAddress=0, Cause=Cause.actcon, GlobalAddress=1)
         cc.data = [Container(address=1)]
         frame = ASDU_Part.build(cc)
-        # print "built ASDU frame=%s" % frame.encode('hex')
+        # print("built ASDU frame=%s" % frame.hex())
         parse = ASDU_Part.parse(frame)
+        # print('parse =', parse)
         re_build = ASDU_Part.build(parse)
-        # print "rebuilt ASDU frame=%s" % re_build.encode('hex')
+        # print("rebuilt ASDU frame=%s" % re_build.hex())
         self.assertEqual(frame, re_build)
 
     def test_parse_bad(self):

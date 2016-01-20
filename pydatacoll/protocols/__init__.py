@@ -91,7 +91,7 @@ class BaseDevice(object, metaclass=ABCMeta):
                                                        self.device_id, protocol_code)
                 term_item = self.redis_client.hgetall(map_key)
                 if not term_item:
-                    logger.debug("DEVICE[%s] precess_data: can't found term_item, key=%s", self.device_id, map_key)
+                    logger.warning("DEVICE[%s] precess_data: can't found term_item, key=%s", self.device_id, map_key)
                     continue
                 if 'coefficient' in term_item and 'base_val' in term_item:
                     data_value = data_value * float(term_item['coefficient']) + float(term_item['base_val'])

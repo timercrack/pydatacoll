@@ -3,6 +3,7 @@ import json
 import asyncio
 import argparse
 
+
 async def device_call(address, port=8080, method='call', device_id=0, term_id=0, item_id=0, value=None):
     try:
         call_dict = {'device_id': device_id, 'term_id': term_id, 'item_id': item_id, 'value': value}
