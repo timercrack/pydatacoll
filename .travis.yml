@@ -1,3 +1,4 @@
+# https://travis-ci.org/timercrack/pydatacoll
 sudo: false
 
 language: python

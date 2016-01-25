@@ -1,6 +1,23 @@
+#!/usr/bin/env python
+#
+# Copyright 2016 timercrack
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
 import argparse
 from collections import defaultdict
 import importlib
+from multiprocessing import Process
 try:
     import ujson as json
 except ImportError:
@@ -1034,22 +1051,16 @@ class APIServer(ParamFunctionContainer):
                 sub_client.close()
             return web.Response(status=400, text=repr(e))
 
-if __name__ == '__main__':
+
+def main():
     api_server = None
     parser = argparse.ArgumentParser(description='PyDataColl RESTful Server')
     parser.add_argument('--port', type=int, help='http listening port, default: 8080')
     parser.add_argument('--production', action='store_true', help='run in production environment')
-    parser.add_argument('--memory-test', action='store_true', help='detect memory leaks')
     parser.add_argument('--mock-iec104', action='store_true', help='run iec104 mock server in sub-process')
     args = parser.parse_args()
-    snapshot1 = None
     iec104_server = None
     try:
-        if args.memory_test:
-            import tracemalloc
-
-            tracemalloc.start()
-            snapshot1 = tracemalloc.take_snapshot()
         if args.mock_iec104:
             from test.mock_device.iec104device import run_server
             from multiprocessing import Process
@@ -1069,9 +1080,6 @@ if __name__ == '__main__':
         api_server and api_server.stop_server()
         iec104_server and iec104_server.terminate()
     print('server is stopped.')
-    if args.memory_test:
-        snapshot2 = tracemalloc.take_snapshot()
-        top_stats = snapshot2.compare_to(snapshot1, 'lineno')
-        print("[ Memory leak detect: Top 10 differences ]")
-        for stat in top_stats[:10]:
-            print(stat)
+
+if __name__ == '__main__':
+    main()

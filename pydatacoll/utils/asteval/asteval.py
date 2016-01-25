@@ -14,13 +14,17 @@ from __future__ import division, print_function
 from sys import exc_info, stdout, stderr, version_info
 import ast
 import math
+from time import time
+
+import sys
 
 from .astutils import (FROM_PY, FROM_MATH, FROM_NUMPY, UNSAFE_ATTRS,
-                       LOCALFUNCS, NUMPY_RENAMES, op2func,
+                       LOCALFUNCS, NUMPY_RENAMES, op2func, RECURSION_LIMIT,
                        ExceptionHolder, ReturnedNone, valid_symbol_name)
 
 HAS_NUMPY = False
 try:
+    # noinspection PyUnresolvedReferences
     import numpy
 
     HAS_NUMPY = True
@@ -32,7 +36,10 @@ builtins = __builtins__
 if not isinstance(builtins, dict):
     builtins = builtins.__dict__
 
+MAX_EXEC_TIME = 2  # sec
 
+
+# noinspection PyIncorrectDocstring
 class Interpreter:
     """mathematical expression compiler and interpreter.
 
@@ -76,10 +83,12 @@ class Interpreter:
                        'slice', 'str', 'subscript', 'try', 'tuple', 'unaryop',
                        'while')
 
-    def __init__(self, symtable=None, writer=None, use_numpy=True,
-                 err_writer=None):
+    def __init__(self, symtable=None, writer=None, use_numpy=True, err_writer=None, max_time=MAX_EXEC_TIME):
         self.writer = writer or stdout
         self.err_writer = err_writer or stderr
+        self.start = 0
+        self.max_time = max_time
+        self.old_recursion_limit = sys.getrecursionlimit()
 
         if symtable is None:
             symtable = {}
@@ -124,29 +133,35 @@ class Interpreter:
             if callable(val) or 'numpy.lib.index_tricks' in repr(val):
                 self.no_deepcopy.append(key)
 
+    @staticmethod
+    def set_recursion_limit():
+        sys.setrecursionlimit(RECURSION_LIMIT)
+
+    def reset_recursion_limit(self):
+        sys.setrecursionlimit(self.old_recursion_limit)
+
     def unimplemented(self, node):
         """unimplemented nodes"""
         self.raise_exception(node, exc=NotImplementedError,
-                             msg="'%s' not supported" %
-                                 (node.__class__.__name__))
+                             msg="'%s' not supported" % node.__class__.__name__)
 
-    def raise_exception(self, node, exc=None, msg='', expr=None,
-                        lineno=None):
+    def raise_exception(self, node, exc=None, msg='', expr=None, lineno=None):
         """add an exception"""
         if self.error is None:
             self.error = []
         if expr is None:
             expr = self.expr
-        if len(self.error) > 0 and not isinstance(node, ast.Module):
+        if self.error and not isinstance(node, ast.Module):
             msg = '%s' % msg
         err = ExceptionHolder(node, exc=exc, msg=msg, expr=expr, lineno=lineno)
         self._interrupt = ast.Break()
         self.error.append(err)
         if self.error_msg is None:
             self.error_msg = "%s in expr='%s'" % (msg, self.expr)
-        elif len(msg) > 0:
+        elif msg:
             self.error_msg = "%s\n %s" % (self.error_msg, msg)
         if exc is None:
+            # noinspection PyBroadException
             try:
                 exc = self.error[0].exc
             except:
@@ -160,21 +175,28 @@ class Interpreter:
     def parse(self, text):
         """parse statement/expression to Ast representation"""
         self.expr = text
+
+        # noinspection PyBroadException
         try:
+            self.set_recursion_limit()
             return ast.parse(text)
         except SyntaxError:
             self.raise_exception(None, msg='Syntax Error', expr=text)
         except:
             self.raise_exception(None, msg='Runtime Error', expr=text)
+        finally:
+            self.reset_recursion_limit()
 
     def run(self, node, expr=None, lineno=None, with_raise=True):
         """executes parsed Ast representation for an expression"""
         # Note: keep the 'node is None' test: internal code here may run
         #    run(None) and expect a None in return.
-        if len(self.error) > 0:
+        if time() - self.start > self.max_time:
+            raise RuntimeError("Execution exceeded time limit, max runtime is {}s".format(MAX_EXEC_TIME))
+        if self.error:
             return
         if node is None:
-            return None
+            return
         if isinstance(node, str):
             node = self.parse(node)
         if lineno is not None:
@@ -191,6 +213,7 @@ class Interpreter:
 
         # run the handler:  this will likely generate
         # recursive calls into this run method.
+        # noinspection PyBroadException
         try:
             ret = handler(node)
             if isinstance(ret, enumerate):
@@ -207,36 +230,48 @@ class Interpreter:
         """evaluates a single statement"""
         self.lineno = lineno
         self.error = []
-        try:
-            node = self.parse(expr)
-        except:
-            errmsg = exc_info()[1]
-            if len(self.error) > 0:
-                errmsg = "\n".join(self.error[0].get_error())
-            if not show_errors:
-                try:
-                    exc = self.error[0].exc
-                except:
-                    exc = RuntimeError
-                raise exc(errmsg)
-            print(errmsg, file=self.err_writer)
-            return
-        try:
-            return self.run(node, expr=expr, lineno=lineno)
-        except:
-            errmsg = exc_info()[1]
-            if len(self.error) > 0:
-                errmsg = "\n".join(self.error[0].get_error())
-            if not show_errors:
-                try:
-                    exc = self.error[0].exc
-                except:
-                    exc = RuntimeError
-                raise exc(errmsg)
-            print(errmsg, file=self.err_writer)
-            return
+        self.start = time()
 
-    def dump(self, node, **kw):
+        try:
+            # noinspection PyBroadException
+            try:
+                self.set_recursion_limit()
+                node = self.parse(expr)
+            except:
+                errmsg = exc_info()[1]
+                if self.error:
+                    errmsg = "\n".join(self.error[0].get_error())
+                if not show_errors:
+                    # noinspection PyBroadException
+                    try:
+                        exc = self.error[0].exc
+                    except:
+                        exc = RuntimeError
+                    raise exc(errmsg)
+                print(errmsg, file=self.err_writer)
+                return
+            # noinspection PyBroadException
+            try:
+                self.set_recursion_limit()
+                return self.run(node, expr=expr, lineno=lineno)
+            except:
+                errmsg = exc_info()[1]
+                if self.error:
+                    errmsg = "\n".join(self.error[0].get_error())
+                if not show_errors:
+                    # noinspection PyBroadException
+                    try:
+                        exc = self.error[0].exc
+                    except:
+                        exc = RuntimeError
+                    raise exc(errmsg)
+                print(errmsg, file=self.err_writer)
+                return
+        finally:
+            self.reset_recursion_limit()
+
+    @staticmethod
+    def dump(node, **kw):
         """simple ast dumper"""
         return ast.dump(node, **kw)
 
@@ -267,10 +302,12 @@ class Interpreter:
             out = self.run(tnode)
         return out
 
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def on_pass(self, node):
         """pass statement"""
         return None  # ()
 
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def on_ellipsis(self, node):
         """ellipses"""
         return Ellipsis
@@ -308,10 +345,12 @@ class Interpreter:
         return dict([(self.run(k), self.run(v)) for k, v in
                      zip(node.keys, node.values)])
 
+    # noinspection PyMethodMayBeStatic
     def on_num(self, node):  # ('n',)
         """return number"""
         return node.n
 
+    # noinspection PyMethodMayBeStatic
     def on_str(self, node):  # ('s',)
         """return string"""
         return node.s
@@ -328,6 +367,7 @@ class Interpreter:
                 msg = "name '%s' is not defined" % node.id
                 self.raise_exception(node, exc=NameError, msg=msg)
 
+    # noinspection PyMethodMayBeStatic
     def on_nameconstant(self, node):
         """ True, False, None in python >= 3.4 """
         return node.value
@@ -340,7 +380,7 @@ class Interpreter:
             if not valid_symbol_name(node.id):
                 errmsg = "invalid symbol name (reserved word?) %s" % node.id
                 self.raise_exception(node, exc=NameError, msg=errmsg)
-            sym = self.symtable[node.id] = val
+            self.symtable[node.id] = val
             if node.id in self.no_deepcopy:
                 self.no_deepcopy.remove(node.id)
 
@@ -357,9 +397,10 @@ class Interpreter:
             if isinstance(node.slice, ast.Index):
                 sym[xslice] = val
             elif isinstance(node.slice, ast.Slice):
+                # noinspection PyTypeChecker
                 sym[slice(xslice.start, xslice.stop)] = val
             elif isinstance(node.slice, ast.ExtSlice):
-                sym[(xslice)] = val
+                sym[xslice] = val
         elif node.__class__ in (ast.Tuple, ast.List):
             if len(val) == len(node.elts):
                 for telem, tval in zip(node.elts, val):
@@ -425,7 +466,7 @@ class Interpreter:
             if isinstance(node.slice, (ast.Index, ast.Slice, ast.Ellipsis)):
                 return val.__getitem__(nslice)
             elif isinstance(node.slice, ast.ExtSlice):
-                return val[(nslice)]
+                return val[nslice]
         else:
             msg = "subscript with unknown context"
             self.raise_exception(node, msg=msg)
@@ -462,7 +503,7 @@ class Interpreter:
         val = self.run(node.values[0])
         is_and = ast.And == node.op.__class__
         if (is_and and val) or (not is_and and not val):
-            for n in node.values:
+            for n in node.values[1:]:
                 val = op2func(node.op)(val, self.run(n))
                 if (is_and and not val) or (not is_and and val):
                     break
@@ -490,7 +531,7 @@ class Interpreter:
         if node.nl:
             end = '\n'
         out = [self.run(tnode) for tnode in node.values]
-        if out and len(self.error) == 0:
+        if out and not self.error:
             self._printer(*out, file=dest, end=end)
 
     def _printer(self, *out, **kws):
@@ -566,15 +607,15 @@ class Interpreter:
 
     def on_excepthandler(self, node):  # ('type', 'name', 'body')
         """exception handler..."""
-        return (self.run(node.type), node.name, node.body)
+        return self.run(node.type), node.name, node.body
 
     def on_try(self, node):  # ('body', 'handlers', 'orelse', 'finalbody')
         """try/except/else/finally blocks"""
         no_errors = True
         for tnode in node.body:
             self.run(tnode, with_raise=False)
-            no_errors = no_errors and len(self.error) == 0
-            if len(self.error) > 0:
+            no_errors = no_errors and not self.error
+            if self.error:
                 e_type, e_value, e_tback = self.error[-1].exc_info
                 for hnd in node.handlers:
                     htype = None
@@ -615,7 +656,7 @@ class Interpreter:
         #  ('func', 'args', 'keywords', and 'starargs', 'kwargs' in py < 3.5)
         func = self.run(node.func)
         if not hasattr(func, '__call__') and not isinstance(func, type):
-            msg = "'%s' is not callable!!" % (func)
+            msg = "'%s' is not callable!!" % func
             self.raise_exception(node, exc=TypeError, msg=msg)
 
         args = [self.run(targ) for targ in node.args]
@@ -626,7 +667,7 @@ class Interpreter:
         keywords = {}
         for key in node.keywords:
             if not isinstance(key, ast.keyword):
-                msg = "keyword error in function call '%s'" % (func)
+                msg = "keyword error in function call '%s'" % func
                 self.raise_exception(node, msg=msg)
             keywords[key.arg] = self.run(key.value)
 
@@ -634,11 +675,13 @@ class Interpreter:
         if kwargs is not None:
             keywords.update(self.run(kwargs))
 
+        # noinspection PyBroadException
         try:
             return func(*args, **keywords)
         except:
-            self.raise_exception(node, msg="Error running %s" % (func))
+            self.raise_exception(node, msg="Error running %s" % func)
 
+    # noinspection PyMethodMayBeStatic
     def on_arg(self, node):  # ('test', 'msg')
         """arg for function definitions"""
         return node.arg
@@ -646,7 +689,7 @@ class Interpreter:
     def on_functiondef(self, node):
         """define procedures"""
         # ('name', 'args', 'body', 'decorator_list')
-        if node.decorator_list != []:
+        if node.decorator_list:
             raise Warning("decorated procedures not supported!")
         kwargs = []
 
@@ -706,12 +749,12 @@ class Procedure(object):
 
     def __repr__(self):
         sig = ""
-        if len(self.argnames) > 0:
+        if self.argnames:
             sig = "%s%s" % (sig, ', '.join(self.argnames))
         if self.vararg is not None:
             sig = "%s, *%s" % (sig, self.vararg)
-        if len(self.kwargs) > 0:
-            if len(sig) > 0:
+        if self.kwargs:
+            if sig:
                 sig = "%s, " % sig
             _kw = ["%s=%s" % (k, v) for k, v in self.kwargs]
             sig = "%s%s" % (sig, ', '.join(_kw))
@@ -728,18 +771,16 @@ class Procedure(object):
         args = list(args)
         n_args = len(args)
         n_names = len(self.argnames)
-        n_kws = len(kwargs)
 
         # may need to move kwargs to args if names align!
-        if (n_args < n_names) and n_kws > 0:
+        if (n_args < n_names) and kwargs:
             for name in self.argnames[n_args:]:
                 if name in kwargs:
                     args.append(kwargs.pop(name))
             n_args = len(args)
             n_names = len(self.argnames)
-            n_kws = len(kwargs)
 
-        if len(self.argnames) > 0 and kwargs is not None:
+        if self.argnames and kwargs is not None:
             msg = "multiple values for keyword argument '%s' in Procedure %s"
             for targ in self.argnames:
                 if targ in kwargs:
@@ -748,7 +789,6 @@ class Procedure(object):
                                    lineno=self.lineno)
 
         if n_args != n_names:
-            msg = None
             if n_args < n_names:
                 msg = 'not enough arguments for Procedure %s()' % self.name
                 msg = '%s (expected %i, got %i)' % (msg, n_names, n_args)
@@ -769,7 +809,7 @@ class Procedure(object):
             if self.varkws is not None:
                 symlocals[self.varkws] = kwargs
 
-            elif len(kwargs) > 0:
+            elif kwargs:
                 msg = 'extra keyword arguments for Procedure %s (%s)'
                 msg = msg % (self.name, ','.join(list(kwargs.keys())))
                 self.raise_exc(None, msg=msg, exc=TypeError,
@@ -788,7 +828,7 @@ class Procedure(object):
         # evaluate script of function
         for node in self.body:
             self.__asteval__.run(node, expr='<>', lineno=self.lineno)
-            if len(self.__asteval__.error) > 0:
+            if self.__asteval__.error:
                 break
             if self.__asteval__.retval is not None:
                 retval = self.__asteval__.retval
@@ -797,5 +837,4 @@ class Procedure(object):
                 break
 
         self.__asteval__.symtable = save_symtable
-        symlocals = None
         return retval
