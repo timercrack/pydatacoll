@@ -36,7 +36,30 @@ PyDataColl can be roughly divided into three parts:
 Installation
 ------------
 
-**Prerequisites**: PyDataColl runs on Python 3.5+. In addition to the requirements showed in requirements.txt,
+**Automatic installation**::
+
+    pip install PyDataColl
+
+PyDataColl is listed in `PyPI <https://pypi.python.org/pypi/PyDataColl>`_ and
+can be installed with ``pip`` or ``easy_install``.  Note that the
+source distribution includes unittest that are not present
+when PyDataColl is installed in this way, so you may wish to download a
+copy of the source tarball as well.
+
+**Manual installation**: Download `source code <https://github.com/timercrack/pydatacoll/archive/v0.1.tar.gz>`_:
+
+.. parsed-literal::
+
+    tar xvzf pydatacoll-0.1.tar.gz
+    cd pydatacoll-0.1
+    python setup.py build
+    sudo python setup.py install
+
+The PyDataColl source code is `hosted on GitHub
+<https://github.com/timercrack/PyDataColl>`_.
+
+**Prerequisites**: PyDataColl runs on Python 3.5+. In addition to the requirements
+which will be installed automatically by ``pip`` or ``setup.py install``,
 the following optional packages may be useful:
 
 * `Redis <http://redis.io/>`_ is heavily used by PyDataColl as NoSQL databases and
@@ -46,24 +69,18 @@ the following optional packages may be useful:
   deploy PyDataColl in local, make sure you have installed and started the MySQL server.
 * `ujson <https://pypi.python.org/pypi/ujson>`_ is an ultra fast JSON encoder and decoder written in pure C with
   bindings for Python. This is an alternative json library and PyDataColl will use it automatically if possible.
-* `hiredis <https://pypi.python.org/pypi/hiredis>`_ is a C library which can provide up to a 10x speed improvement in
-  parsing responses from the Redis server. This is an alternative redis client and
-  PyDataColl will use it automatically if possible.
 
-1.  Download the latest source code `hosted on github <https://github.com/timercrack/pydatacoll>`_, open a shell
-    (*CMD* in Windows, *Terminal* in Linux and Mac OS X) and go to the source code directory, install required
-    package using pip::
+Quick Start
+-----------
 
-        pip install -r requirements.txt
+1.  Simply run the following to start PyDataColl server(add "-h" to see all available parameter)::
 
-2.  Then run the following to start PyDataColl server::
-
-        python -m pydatacoll.api_server
+        pydatacoll
 
 .. note::
-    to stop server, press CTRL+C to exit
+    To stop server, press CTRL+C to exit.
 
-3.  Congratulations! The server is running now. Visit http://localhost:8080 in browser to see the server information, if
+2.  Visit http://localhost:8080 in browser to see the server information, if
     success, you will find something like this::
 
         PyDataColl is running, available API:
@@ -72,7 +89,8 @@ the following optional packages may be useful:
         method: GET      URL: http://localhost:8080/api/v1/devices
         (...more omitted)
 
-4.  Now you can send request to server with your favorite http client! check :doc:`restapi` to see the API list.
+3.  The server is running now. You can send request to server with your favorite http client!
+    check :doc:`restapi` to see the API list.
 
 **Platforms**: PyDataColl should run on any Unix-like platform, although for the best performance and scalability only
 Linux (with ``epoll``) and BSD (with ``kqueue``) are recommended for production deployment (even though Mac OS X is

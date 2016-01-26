@@ -3,8 +3,7 @@ Introduction
 
 PyDataColl is a `SCADA <Ahttps://en.wikipedia.org/wiki/SCADA>`_-like system which use Python as the main language. It
 originally inspired by an old program I made as for a core part of a large
-`EMS <https://en.wikipedia.org/wiki/Energy_management_system>`_ when I worked as an engineer at GDT(A
-`SGCC <https://en.wikipedia.org/wiki/State_Grid_Corporation_of_China>`_ 's subsidiary).
+`EMS <https://en.wikipedia.org/wiki/Energy_management_system>`_.
 
 PyDataColl can be roughly divided into three parts:
 
