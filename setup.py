@@ -28,22 +28,8 @@ with open('README.rst') as f:
 
 kwargs['version'] = version
 
-kwargs['install_requires'] = [
-    'aiohttp>=0.20.1',
-    'aioredis>=0.2.4',
-    'cchardet>=1.0.0',
-    'construct>=2.5.2',
-    'hiredis>=0.2.0',
-    'numpy>=1.10.4',
-    'pandas>=0.17.1',
-    'PyMySQL>=0.6.7',
-    'python-dateutil>=2.4.2',
-    'pytz>=2015.7',
-    'redis>=2.10.5',
-    'six>=1.10.0',
-    'ujson>=1.34',
-    'appdirs>=1.4.0',
-]
+with open('requirements.txt') as f:
+    kwargs['install_requires'] = f.read().splitlines()
 
 setup(
     name="PyDataColl",

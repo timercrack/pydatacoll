@@ -55,6 +55,14 @@ T3 = 20
 K = 4096
 W = 4000
 
+[GB31960]
+# TCP server port
+port = 6000
+# data collection interval in seconds, default is 900(15 min)
+coll_interval = 900
+# log send/recv frame to redis for debug
+log_frame = True
+
 [REDIS]
 host = 127.0.0.1
 port = 6379
