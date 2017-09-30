@@ -23,7 +23,7 @@ except ImportError:
     import json
 import pymysql
 from pydatacoll.plugins import BaseModule
-from pydatacoll.utils.asteval import Interpreter
+from asteval import Interpreter
 from pydatacoll.utils.func_container import param_function
 import pydatacoll.utils.logger as my_logger
 from pydatacoll.utils.read_config import *

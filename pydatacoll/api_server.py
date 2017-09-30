@@ -1081,5 +1081,6 @@ def main():
         iec104_server and iec104_server.terminate()
     print('server is stopped.')
 
+
 if __name__ == '__main__':
     main()

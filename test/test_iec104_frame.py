@@ -20,18 +20,19 @@ i_big = b"\x68\xfa\xd2\x00\x06\x00\x0f\x1e\x25\x00\x01\x00\xd3\x64\x00\x1e\x00\x
 
 class IEC104Test(unittest.TestCase):
     def test_M_SP_NA_1(self):
-        frame = iec_104.init_frame(1, 2, TYP.M_SP_NA_1, Cause.introgen)
-        # print('after init=', frame)
+        frame = Container(APCI1=1, APCI2=2, Cause=Cause.introgen, ASDU=Container())
+        frame.ASDU.data = [Container()]
+        frame.ASDU.TYP = TYP.M_SP_NA_1
         frame.ASDU.StartAddress = 10
         frame.ASDU.data[0].address = 5
         frame.ASDU.data[0].value = 1
-        # print('frame=', frame)
-        build = iec_104.build_isu(frame)
-        # print('build=', build.hex())
+        print('frame=', frame)
+        build = iec_104.build(frame)
+        print('build=', build.hex())
         parse = iec_104.parse(build)
-        # print('parse=', parse)
-        rebuild = iec_104.build_isu(parse)
-        # print('rebuild=', rebuild.hex())
+        print('parse=', parse)
+        rebuild = iec_104.build(parse)
+        print('rebuild=', rebuild.hex())
         self.assertEqual(build, rebuild)
         self.assertEqual(frame.ASDU.data[0].value, parse.ASDU.data[0].value)
 
@@ -52,7 +53,8 @@ class IEC104Test(unittest.TestCase):
 
     def test_build_u(self):
         c = iec_104.init_frame(UFrame.STARTDT_ACT)
-        frame = iec_104.build_isu(c)
+        print(c)
+        frame = iec_104.build(c)
         # print "built U frame=%s" % frame.encode('hex')
         self.assertEqual(frame, u_bin)
 
@@ -141,7 +143,7 @@ class IEC104Test(unittest.TestCase):
         c = iec_104.init_frame(166, 7, TYP.M_IT_NA_1, sq_count=5, sq=1)
         c.ASDU.StartAddress = 50
         for idx in range(5):
-            c.ASDU.data[idx].value = idx+100
+            c.ASDU.data[idx].value = idx + 100
             c.ASDU.data[idx].sq = idx
         # print("before build=", c)
         build = iec_104.build_isu(c)  # 使用 build_isu 组装I帧

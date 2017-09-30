@@ -24,7 +24,7 @@ try:
     import ujson as json
 except ImportError:
     import json
-from pydatacoll.utils.asteval import Interpreter
+from asteval import Interpreter
 import numpy as np
 import pandas as pd
 from pydatacoll.plugins import BaseModule
@@ -71,7 +71,7 @@ class FormulaCalc(BaseModule):
                 if param.startswith('p') and param_value not in self.pandas_dict:
                     data_dict = self.redis_client.hgetall('HS:DATA:{}'.format(param_value))
                     self.pandas_dict[param_value] = pd.Series(data_dict, dtype=float)
-                    self.pandas_dict[param_value].index = self.pandas_dict[param_value].index.to_datetime()
+                    self.pandas_dict[param_value].index = pd.to_datetime(self.pandas_dict[param_value].index)
             formula_dict['result'] = "{}:{}:{}".format(
                     formula_dict['device_id'], formula_dict['term_id'], formula_dict['item_id'])
             self.formula_dict[formula_id] = formula_dict

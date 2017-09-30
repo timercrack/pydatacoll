@@ -56,7 +56,7 @@ class FormulaCalcTest(asynctest.TestCase):
         # 统计06年1月份的累计值
         formula_dict = {
             'id': '2', 'device_id': '3', 'term_id': '40', 'item_id': '1000',
-            'formula': "p1.resample('M', how='sum')['2016-01']",
+            'formula': "p1.resample('M').sum()['2016-01'][0]",
             'p1': '9:90:9000'}
         self.redis_client.hmset('HS:FORMULA:2', formula_dict)
 
@@ -77,5 +77,5 @@ class FormulaCalcTest(asynctest.TestCase):
         lst = sorted(rst.keys())
         self.assertAlmostEqual(
                 float(rst[lst[-1]]),
-                ts.resample('M', how='sum')['2016-01'][0],
+                ts.resample('M').sum()['2016-01'][0],
                 delta=0.0001)

@@ -14,6 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+
 def str_to_number(s):
     try:
         if not isinstance(s, str):
