@@ -103,6 +103,7 @@ class BaseModule(ParamFunctionContainer, metaclass=ABCMeta):
             loop.run_until_complete(plugin.uninstall())
         loop.close()
 
+
 available_plugins = {
     'device_manage': 'DeviceManager',
     'db_save': 'DBSaver',

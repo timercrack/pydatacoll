@@ -94,7 +94,7 @@ class APIServer(ParamFunctionContainer):
         self.web_server.close()
         self.io_loop.run_until_complete(self.web_server.wait_closed())
         self.io_loop.run_until_complete(self.web_handler.finish_connections(1.0))
-        self.io_loop.run_until_complete(self.web_app.finish())
+        self.io_loop.run_until_complete(self.web_app.cleanup())
         logger.info('ApiServer stopped')
 
     def found_and_delete(self, match: str):

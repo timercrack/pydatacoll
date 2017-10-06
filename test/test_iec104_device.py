@@ -63,7 +63,8 @@ class IEC104DeviceTest(asynctest.TestCase):
     async def test_time_sync(self):
         device = IEC104Device(mock_data.device2, self.loop)
         await device.data_link_established
-        send_data = iec_104.init_frame(device.ssn, device.rsn, TYP.C_CS_NA_1, Cause.act)  # 103 时钟同步命令
+        send_data = Container(APCI1=device.ssn, APCI2=device.rsn, ASDU=Container(
+            TYP=TYP.C_CS_NA_1, Cause=Cause.act))  # 103 时钟同步命令
         await device.send_frame(send_data)
         self.assertEqual(device.send_list[0].ASDU.TYP, TYP.C_CS_NA_1)
         await device.time_synced
@@ -81,7 +82,8 @@ class IEC104DeviceTest(asynctest.TestCase):
         device = IEC104Device(mock_data.device1, self.loop)
         await device.data_link_established
         # 100 总召唤
-        send_data = iec_104.init_frame(device.ssn, device.rsn, TYP.C_IC_NA_1, Cause.act)
+        send_data = Container(APCI1=device.ssn, APCI2=device.rsn, ASDU=Container(
+            TYP=TYP.C_IC_NA_1, Cause=Cause.act))
         await device.send_frame(send_data)
         self.assertEqual(device.send_list[0].ASDU.TYP, TYP.C_IC_NA_1)
         await device.all_data_called
@@ -97,7 +99,8 @@ class IEC104DeviceTest(asynctest.TestCase):
     #     device = IEC104Device(mock_data.device_list[0], self.loop)
     #     await asyncio.sleep(3)
     #     # 101 电能量召唤
-    #     send_data = iec_104.init_frame(device.ssn, device.rsn, TYP.C_CI_NA_1, Cause.act)
+    #     send_data = Container(APCI1=device.ssn, APCI2=device.rsn, ASDU=Container(
+    #         TYP=TYP.C_CI_NA_1, Cause=Cause.act))
     #     await device.send_frame(send_data)
     #     self.assertEqual(device.send_list[0].ASDU.TYP, TYP.C_CI_NA_1)
     #     await asyncio.sleep(3)

@@ -78,384 +78,395 @@ class InterfaceTest(asynctest.TestCase):
             self.loop.run_until_complete(server.wait_closed())
 
     async def test_get_redis_key(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/redis_key') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst['channel'], REDIS_KEY['channel'])
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/redis_key') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst['channel'], REDIS_KEY['channel'])
 
     async def test_get_protocol_list(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/device_protocols') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, DEVICE_PROTOCOLS)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/term_protocols') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, TERM_PROTOCOLS)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/device_protocols') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, DEVICE_PROTOCOLS)
+            async with ss.get('http://127.0.0.1:8080/api/v1/term_protocols') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, TERM_PROTOCOLS)
 
     async def test_formula_CRUD(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertSequenceEqual(rst, ['1'])
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas/1') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, mock_data.formula1)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/formulas/99') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'formula_id not found!')
-
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:FORMULA:9')
-            self.assertEqual(rst['formula'], mock_data.test_formula['formula'])
-            rst = self.redis_client.sismember('SET:FORMULA', 9)
-            self.assertTrue(rst)
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formulas', data=json.dumps(mock_data.test_formula)) as r:
-            self.assertEqual(r.status, 409)
-            rst = await r.text()
-            self.assertEqual(rst, 'formula already exists!')
-
-        mock_data.test_formula['formula'] = '2+2'
-        mock_data.test_formula['id'] = 5
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/9', data=json.dumps(mock_data.test_formula)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:FORMULA:9')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:FORMULA', 9)
-            self.assertFalse(rst)
-            rst = self.redis_client.hgetall('HS:FORMULA:5')
-            self.assertEqual(rst['formula'], '2+2')
-            rst = self.redis_client.sismember('SET:FORMULA', 5)
-            self.assertTrue(rst)
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/formulas/99', data=json.dumps(mock_data.test_formula)) as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'formula_id not found!')
-
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v1/formulas/5') as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:FORMULA:5')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:FORMULA', 5)
-            self.assertFalse(rst)
-
-        formula_check = {'formula': 'p1[-1]+10', 'p1': '1:10:1000'}
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.text()
-            self.assertEqual(rst, 'OK')
-        formula_check['formula'] = 'p1[-1]+p2[-2]'
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.text()
-            self.assertEqual(rst, """NameError
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/formulas') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertSequenceEqual(rst, ['1'])
+            async with ss.get('http://127.0.0.1:8080/api/v1/formulas/1') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, mock_data.formula1)
+            async with ss.get('http://127.0.0.1:8080/api/v1/formulas/99') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'formula_id not found!')
+    
+            async with ss.post('http://127.0.0.1:8080/api/v1/formulas', json=mock_data.test_formula) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.hgetall('HS:FORMULA:9')
+                self.assertEqual(rst['formula'], mock_data.test_formula['formula'])
+                rst = self.redis_client.sismember('SET:FORMULA', 9)
+                self.assertTrue(rst)
+            async with ss.post('http://127.0.0.1:8080/api/v1/formulas', json=mock_data.test_formula) as r:
+                self.assertEqual(r.status, 409)
+                rst = await r.text()
+                self.assertEqual(rst, 'formula already exists!')
+    
+            mock_data.test_formula['formula'] = '2+2'
+            mock_data.test_formula['id'] = 5
+            async with ss.put('http://127.0.0.1:8080/api/v1/formulas/9', json=mock_data.test_formula) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:FORMULA:9')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:FORMULA', 9)
+                self.assertFalse(rst)
+                rst = self.redis_client.hgetall('HS:FORMULA:5')
+                self.assertEqual(rst['formula'], '2+2')
+                rst = self.redis_client.sismember('SET:FORMULA', 5)
+                self.assertTrue(rst)
+            async with ss.put('http://127.0.0.1:8080/api/v1/formulas/99', json=mock_data.test_formula) as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'formula_id not found!')
+    
+            async with ss.delete('http://127.0.0.1:8080/api/v1/formulas/5') as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:FORMULA:5')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:FORMULA', 5)
+                self.assertFalse(rst)
+    
+            formula_check = {'formula': 'p1[-1]+10', 'p1': '1:10:1000'}
+            async with ss.post('http://127.0.0.1:8080/api/v1/formula_check', json=formula_check) as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.text()
+                self.assertEqual(rst, 'OK')
+            formula_check['formula'] = 'p1[-1]+p2[-2]'
+            async with ss.post('http://127.0.0.1:8080/api/v1/formula_check', json=formula_check) as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.text()
+                expect = """NameError
    p1[-1]+p2[-2]
            ^^^
 name 'p2' is not defined
-""")
-
-        formula_check['p1'] = '123:45:6'
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/formula_check', data=json.dumps(formula_check)) as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.text()
-            self.assertEqual(rst, "parameter not found: p1=123:45:6")
-
-        formulas = [1]
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/formulas/del', data=json.dumps(formulas)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.smembers('SET:FORMULA')
-            self.assertEqual(len(rst), 0)
+"""
+                self.assertEqual(rst, expect)
+    
+            formula_check['p1'] = '123:45:6'
+            async with ss.post('http://127.0.0.1:8080/api/v1/formula_check', json=formula_check) as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.text()
+                self.assertEqual(rst, "parameter not found: p1=123:45:6")
+    
+            formulas = [1]
+            async with ss.post('http://127.0.0.1:8080/api/v2/formulas/del', json=formulas) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.smembers('SET:FORMULA')
+                self.assertEqual(len(rst), 0)
 
     async def test_device_CRUD(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertSetEqual(set(rst), {'1', '2', '3'})
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, mock_data.device1)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'device_id not found!')
-
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/devices', data=json.dumps(mock_data.test_device)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:DEVICE:4')
-            self.assertEqual(rst['name'], '测试集中器4')
-            rst = self.redis_client.sismember('SET:DEVICE', 4)
-            self.assertTrue(rst)
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/devices', data=json.dumps(mock_data.test_device)) as r:
-            self.assertEqual(r.status, 409)
-            rst = await r.text()
-            self.assertEqual(rst, 'device already exists!')
-
-        mock_data.test_device['name'] = '测试集中器5'
-        mock_data.test_device['id'] = 5
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/devices/4', data=json.dumps(mock_data.test_device)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:DEVICE:4')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:DEVICE', 4)
-            self.assertFalse(rst)
-            rst = self.redis_client.hgetall('HS:DEVICE:5')
-            self.assertEqual(rst['name'], '测试集中器5')
-            rst = self.redis_client.sismember('SET:DEVICE', 5)
-            self.assertTrue(rst)
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/devices/99', data=json.dumps(mock_data.test_device)) as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'device_id not found!')
-
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v1/devices/5') as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:DEVICE:5')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:DEVICE', 5)
-            self.assertFalse(rst)
-
-        devices = [1, 2, 3]
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/devices/del', data=json.dumps(devices)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.smembers('SET:DEVICE')
-            self.assertEqual(len(rst), 0)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertSetEqual(set(rst), {'1', '2', '3'})
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/1') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, mock_data.device1)
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/99') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'device_id not found!')
+    
+            async with ss.post('http://127.0.0.1:8080/api/v1/devices', json=mock_data.test_device) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.hgetall('HS:DEVICE:4')
+                self.assertEqual(rst['name'], '测试集中器4')
+                rst = self.redis_client.sismember('SET:DEVICE', 4)
+                self.assertTrue(rst)
+            async with ss.post('http://127.0.0.1:8080/api/v1/devices', json=mock_data.test_device) as r:
+                self.assertEqual(r.status, 409)
+                rst = await r.text()
+                self.assertEqual(rst, 'device already exists!')
+    
+            mock_data.test_device['name'] = '测试集中器5'
+            mock_data.test_device['id'] = 5
+            async with ss.put('http://127.0.0.1:8080/api/v1/devices/4', json=mock_data.test_device) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:DEVICE:4')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:DEVICE', 4)
+                self.assertFalse(rst)
+                rst = self.redis_client.hgetall('HS:DEVICE:5')
+                self.assertEqual(rst['name'], '测试集中器5')
+                rst = self.redis_client.sismember('SET:DEVICE', 5)
+                self.assertTrue(rst)
+            async with ss.put('http://127.0.0.1:8080/api/v1/devices/99', json=mock_data.test_device) as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'device_id not found!')
+    
+            async with ss.delete('http://127.0.0.1:8080/api/v1/devices/5') as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:DEVICE:5')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:DEVICE', 5)
+                self.assertFalse(rst)
+    
+            devices = [1, 2, 3]
+            async with ss.post('http://127.0.0.1:8080/api/v2/devices/del', json=devices) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.smembers('SET:DEVICE')
+                self.assertEqual(len(rst), 0)
 
     async def test_term_CRUD(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertSetEqual(set(rst), {'10', '20', '30', '40'})
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, mock_data.term10)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/99') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_id not found!')
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertSetEqual(set(rst), {'10', '20'})
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99/terms') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'device_id not found!')
-
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/terms', data=json.dumps(mock_data.test_term)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:TERM:90')
-            self.assertEqual(rst['name'], '测试终端9')
-            rst = self.redis_client.sismember('SET:TERM', 90)
-            self.assertTrue(rst)
-            rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 90)
-            self.assertEqual(rst, True)
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/terms', data=json.dumps(mock_data.test_term)) as r:
-            self.assertEqual(r.status, 409)
-            rst = await r.text()
-            self.assertEqual(rst, 'term already exists!')
-
-        mock_data.test_term['name'] = '测试终端5'
-        mock_data.test_term['id'] = 50
-        mock_data.test_term['device_id'] = 2
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/terms/90', data=json.dumps(mock_data.test_term)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:TERM:90')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:TERM', 90)
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 90)
-            self.assertFalse(rst)
-            rst = self.redis_client.hgetall('HS:TERM:50')
-            self.assertEqual(rst['name'], '测试终端5')
-            rst = self.redis_client.sismember('SET:TERM', 50)
-            self.assertTrue(rst)
-            rst = self.redis_client.sismember('SET:DEVICE_TERM:2', 50)
-            self.assertTrue(rst)
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/terms/99', data=json.dumps(mock_data.test_term)) as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_id not found!')
-
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v1/terms/50') as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:TERM:50')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:TERM', 50)
-            self.assertFalse(rst)
-
-        terms = [10, 20, 30, 40]
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/terms/del', data=json.dumps(terms)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.smembers('SET:TERM')
-            self.assertEqual(len(rst), 0)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertSetEqual(set(rst), {'10', '20', '30', '40'})
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/10') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, mock_data.term10)
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/99') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_id not found!')
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/1/terms') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertSetEqual(set(rst), {'10', '20'})
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/99/terms') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'device_id not found!')
+    
+            async with ss.post('http://127.0.0.1:8080/api/v1/terms', json=mock_data.test_term) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.hgetall('HS:TERM:90')
+                self.assertEqual(rst['name'], '测试终端9')
+                rst = self.redis_client.sismember('SET:TERM', 90)
+                self.assertTrue(rst)
+                rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 90)
+                self.assertEqual(rst, True)
+            async with ss.post('http://127.0.0.1:8080/api/v1/terms', json=mock_data.test_term) as r:
+                self.assertEqual(r.status, 409)
+                rst = await r.text()
+                self.assertEqual(rst, 'term already exists!')
+    
+            mock_data.test_term['name'] = '测试终端5'
+            mock_data.test_term['id'] = 50
+            mock_data.test_term['device_id'] = 2
+            async with ss.put('http://127.0.0.1:8080/api/v1/terms/90', json=mock_data.test_term) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:TERM:90')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:TERM', 90)
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:DEVICE_TERM:1', 90)
+                self.assertFalse(rst)
+                rst = self.redis_client.hgetall('HS:TERM:50')
+                self.assertEqual(rst['name'], '测试终端5')
+                rst = self.redis_client.sismember('SET:TERM', 50)
+                self.assertTrue(rst)
+                rst = self.redis_client.sismember('SET:DEVICE_TERM:2', 50)
+                self.assertTrue(rst)
+            async with ss.put('http://127.0.0.1:8080/api/v1/terms/99', json=mock_data.test_term) as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_id not found!')
+    
+            async with ss.delete('http://127.0.0.1:8080/api/v1/terms/50') as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:TERM:50')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:TERM', 50)
+                self.assertFalse(rst)
+    
+            terms = [10, 20, 30, 40]
+            async with ss.post('http://127.0.0.1:8080/api/v2/terms/del', json=terms) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.smembers('SET:TERM')
+                self.assertEqual(len(rst), 0)
 
     async def test_item_CRUD(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/items') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertSetEqual(set(rst), {'1000', '2000'})
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/items/1000') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, mock_data.item1000)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/items/99') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'item_id not found!')
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10/items') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertSetEqual(set(rst), {'1000', '2000'})
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/99/items') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_id not found!')
-
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/items', data=json.dumps(mock_data.test_item)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:ITEM:3000')
-            self.assertEqual(rst['name'], 'C相电压')
-            rst = self.redis_client.sismember('SET:ITEM', 3000)
-            self.assertTrue(rst)
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/items', data=json.dumps(mock_data.test_item)) as r:
-            self.assertEqual(r.status, 409)
-            rst = await r.text()
-            self.assertEqual(rst, 'item already exists!')
-
-        mock_data.test_item['name'] = '功率因数'
-        mock_data.test_item['id'] = 4000
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/items/3000', data=json.dumps(mock_data.test_item)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:ITEM:3000')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:ITEM', 3000)
-            self.assertFalse(rst)
-            rst = self.redis_client.hgetall('HS:ITEM:4000')
-            self.assertEqual(rst['name'], '功率因数')
-            rst = self.redis_client.sismember('SET:ITEM', 4000)
-            self.assertTrue(rst)
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/items/99', data=json.dumps(mock_data.test_item)) as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'item_id not found!')
-
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v1/items/4000') as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:ITEM:4000')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:ITEM', 4000)
-            self.assertFalse(rst)
-
-        items = [1000, 2000]
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/items/del', data=json.dumps(items)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.smembers('SET:ITEM')
-            self.assertEqual(len(rst), 0)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/items') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertSetEqual(set(rst), {'1000', '2000'})
+            async with ss.get('http://127.0.0.1:8080/api/v1/items/1000') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, mock_data.item1000)
+            async with ss.get('http://127.0.0.1:8080/api/v1/items/99') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'item_id not found!')
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/10/items') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertSetEqual(set(rst), {'1000', '2000'})
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/99/items') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_id not found!')
+    
+            async with ss.post('http://127.0.0.1:8080/api/v1/items', json=mock_data.test_item) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.hgetall('HS:ITEM:3000')
+                self.assertEqual(rst['name'], 'C相电压')
+                rst = self.redis_client.sismember('SET:ITEM', 3000)
+                self.assertTrue(rst)
+            async with ss.post('http://127.0.0.1:8080/api/v1/items', json=mock_data.test_item) as r:
+                self.assertEqual(r.status, 409)
+                rst = await r.text()
+                self.assertEqual(rst, 'item already exists!')
+    
+            mock_data.test_item['name'] = '功率因数'
+            mock_data.test_item['id'] = 4000
+            async with ss.put('http://127.0.0.1:8080/api/v1/items/3000', json=mock_data.test_item) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:ITEM:3000')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:ITEM', 3000)
+                self.assertFalse(rst)
+                rst = self.redis_client.hgetall('HS:ITEM:4000')
+                self.assertEqual(rst['name'], '功率因数')
+                rst = self.redis_client.sismember('SET:ITEM', 4000)
+                self.assertTrue(rst)
+            async with ss.put('http://127.0.0.1:8080/api/v1/items/99', json=mock_data.test_item) as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'item_id not found!')
+    
+            async with ss.delete('http://127.0.0.1:8080/api/v1/items/4000') as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:ITEM:4000')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:ITEM', 4000)
+                self.assertFalse(rst)
+    
+            items = [1000, 2000]
+            async with ss.post('http://127.0.0.1:8080/api/v2/items/del', json=items) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.smembers('SET:ITEM')
+                self.assertEqual(len(rst), 0)
 
     async def test_get_data(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, mock_data.device1_term10_item1000)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas/-1') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102.0'})
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/devices/99/terms/99/items/99/datas') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertEqual(len(rst), 0)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, mock_data.device1_term10_item1000)
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/1/terms/10/items/1000/datas/-1') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, {'2015-12-01T08:50:15.000003': '102.0'})
+            async with ss.get('http://127.0.0.1:8080/api/v1/devices/99/terms/99/items/99/datas') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertEqual(len(rst), 0)
 
     async def test_term_item_CRUD(self):
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10/items/1000') as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertDictEqual(rst, mock_data.term10_item1000)
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/99/items/1000') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_id not found!')
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/10/items/99') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'item_id not found!')
-        async with aiohttp.get('http://127.0.0.1:8080/api/v1/terms/20/items/2000') as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_item not found!')
-
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/terms/20/items',
-                                data=json.dumps(mock_data.test_term_item)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.hgetall('HS:TERM_ITEM:20:2000')
-            mock_data.test_term_item.update({'device_id': '1'})
-            self.assertDictEqual(rst, mock_data.test_term_item)
-            rst = self.redis_client.hgetall('HS:MAPPING:IEC104:1:400')
-            self.assertDictEqual(rst, mock_data.test_term_item)
-            rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
-            self.assertTrue(rst)
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/terms/20/items',
-                                data=json.dumps(mock_data.test_term_item)) as r:
-            self.assertEqual(r.status, 409)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_item already exists!')
-
-        mock_data.test_term_item['protocol_code'] = '401'
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/terms/20/items/2000',
-                               data=json.dumps(mock_data.test_term_item)) as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
-            self.assertTrue(rst)
-            rst = self.redis_client.exists('HS:MAPPING:IEC104:1:400')
-            self.assertFalse(rst)
-            rst = self.redis_client.hgetall('HS:TERM_ITEM:20:2000')
-            self.assertEqual(rst['protocol_code'], '401')
-            rst = self.redis_client.hgetall('HS:MAPPING:IEC104:1:401')
-            self.assertDictEqual(rst, mock_data.test_term_item)
-        async with aiohttp.put('http://127.0.0.1:8080/api/v1/terms/30/items/2000',
-                               data=json.dumps(mock_data.test_term_item)) as r:
-            self.assertEqual(r.status, 404)
-            rst = await r.text()
-            self.assertEqual(rst, 'term_item not found!')
-
-        async with aiohttp.delete('http://127.0.0.1:8080/api/v1/terms/20/items/2000') as r:
-            self.assertEqual(r.status, 200)
-            rst = self.redis_client.exists('HS:TERM_ITEM:20:2000')
-            self.assertFalse(rst)
-            rst = self.redis_client.exists('HS:MAPPING:IEC104:1:401')
-            self.assertFalse(rst)
-            rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
-            self.assertFalse(rst)
-        del mock_data.test_term_item['device_id']
-
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/term_items/del',
-                                  data=json.dumps(mock_data.term_item_list)) as r:
-            self.assertEqual(r.status, 200)
-            rst = list(self.redis_client.scan_iter('HS:TERM_ITEMS:*'))
-            self.assertEqual(len(rst), 0)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/10/items/1000') as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertDictEqual(rst, mock_data.term10_item1000)
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/99/items/1000') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_id not found!')
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/10/items/99') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'item_id not found!')
+            async with ss.get('http://127.0.0.1:8080/api/v1/terms/20/items/2000') as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_item not found!')
+    
+            async with ss.post('http://127.0.0.1:8080/api/v1/terms/20/items', 
+                               json=mock_data.test_term_item) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.hgetall('HS:TERM_ITEM:20:2000')
+                mock_data.test_term_item.update({'device_id': '1'})
+                self.assertDictEqual(rst, mock_data.test_term_item)
+                rst = self.redis_client.hgetall('HS:MAPPING:IEC104:1:400')
+                self.assertDictEqual(rst, mock_data.test_term_item)
+                rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
+                self.assertTrue(rst)
+            async with ss.post('http://127.0.0.1:8080/api/v1/terms/20/items', 
+                               json=mock_data.test_term_item) as r:
+                self.assertEqual(r.status, 409)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_item already exists!')
+    
+            mock_data.test_term_item['protocol_code'] = '401'
+            async with ss.put('http://127.0.0.1:8080/api/v1/terms/20/items/2000',
+                              json=mock_data.test_term_item) as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
+                self.assertTrue(rst)
+                rst = self.redis_client.exists('HS:MAPPING:IEC104:1:400')
+                self.assertFalse(rst)
+                rst = self.redis_client.hgetall('HS:TERM_ITEM:20:2000')
+                self.assertEqual(rst['protocol_code'], '401')
+                rst = self.redis_client.hgetall('HS:MAPPING:IEC104:1:401')
+                self.assertDictEqual(rst, mock_data.test_term_item)
+            async with ss.put('http://127.0.0.1:8080/api/v1/terms/30/items/2000',
+                              json=mock_data.test_term_item) as r:
+                self.assertEqual(r.status, 404)
+                rst = await r.text()
+                self.assertEqual(rst, 'term_item not found!')
+    
+            async with ss.delete('http://127.0.0.1:8080/api/v1/terms/20/items/2000') as r:
+                self.assertEqual(r.status, 200)
+                rst = self.redis_client.exists('HS:TERM_ITEM:20:2000')
+                self.assertFalse(rst)
+                rst = self.redis_client.exists('HS:MAPPING:IEC104:1:401')
+                self.assertFalse(rst)
+                rst = self.redis_client.sismember('SET:TERM_ITEM:20', 2000)
+                self.assertFalse(rst)
+            del mock_data.test_term_item['device_id']
+    
+            async with ss.post('http://127.0.0.1:8080/api/v2/term_items/del',
+                               json=mock_data.term_item_list) as r:
+                self.assertEqual(r.status, 200)
+                rst = list(self.redis_client.scan_iter('HS:TERM_ITEMS:*'))
+                self.assertEqual(len(rst), 0)
 
     async def test_device_call(self):
         call_dict = {'device_id': '1', 'term_id': '10', 'item_id': 1000}
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/device_call', data=json.dumps(call_dict)) as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertAlmostEqual(rst['value'], 102, delta=0.0001)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.post('http://127.0.0.1:8080/api/v1/device_call', json=call_dict) as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertAlmostEqual(rst['value'], 102, delta=0.0001)
 
     async def test_device_ctrl(self):
         ctrl_dict = {'device_id': '2', 'term_id': '30', 'item_id': '1000', 'value': 123.4}
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/device_ctrl', data=json.dumps(ctrl_dict)) as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.json()
-            self.assertAlmostEqual(rst['value'], 123.4, delta=0.0001)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.post('http://127.0.0.1:8080/api/v1/device_ctrl', json=ctrl_dict) as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.json()
+                self.assertAlmostEqual(rst['value'], 123.4, delta=0.0001)
 
     async def test_sql_check(self):
-        async with aiohttp.post('http://127.0.0.1:8080/api/v1/sql_check',
-                                data=json.dumps(mock_data.term10_item1000)) as r:
-            self.assertEqual(r.status, 200)
-            rst = await r.text()
-            self.assertEqual(rst, 'not found sql to check')
+        async with aiohttp.ClientSession() as ss:
+            async with ss.post('http://127.0.0.1:8080/api/v1/sql_check', json=mock_data.term10_item1000) as r:
+                self.assertEqual(r.status, 200)
+                rst = await r.text()
+                self.assertEqual(rst, 'not found sql to check')

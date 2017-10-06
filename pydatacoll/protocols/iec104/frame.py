@@ -191,7 +191,7 @@ QDS = "QDS" / BitStruct(
     "SB" / Default(Bit, 0),  # 0 未被取代 1 被取代
     "BL" / Default(Bit, 0),  # 0 未被闭锁 1 被闭锁
     Padding(3),
-    "OV" / SymmetricMapping(Bit, {True: 0, False: 1}, default=True),  # 0 未溢出 1 溢出
+    "OV" / Default(SymmetricMapping(Bit, {True: 0, False: 1}, default=True), 0),  # 0 未溢出 1 溢出
 )
 
 # 继电保护设备事件的品质描述词
@@ -217,7 +217,7 @@ BCR = "BCR" / Struct(
         "IV" / Default(Bit, 0),  # 0 有效 1 无效
         "CA" / Default(Bit, 0),  # 0 上次读数后计数器未被调整 1 被调整
         "CY" / Default(Bit, 0),  # 0 未溢出 1 溢出
-        "sq" / BitsInteger(5),  # 0~31 顺序号
+        "sq" / Default(BitsInteger(5), 0),  # 0~31 顺序号
     ),
 )
 
@@ -236,39 +236,47 @@ SEP = "SEP" / BitStruct(
 QPM = "QPM" / BitStruct(
     "POP" / Default(Bit, 0),  # 0 运行 1 未运行
     "LPC" / Default(Bit, 0),  # 0 未改变 1 改变
-    "KPA" / BitsInteger(6),  # 参数类别 0 未用 1 门限值 2 平滑系数（滤波时间常数） 3 下限 4 上限
+    "KPA" / Default(BitsInteger(6), 0),  # 参数类别 0 未用 1 门限值 2 平滑系数（滤波时间常数） 3 下限 4 上限
 )
 
 # 设定命令限定词
 QOS = "QOS" / BitStruct(
     "se" / Default(Bit, 0),  # 0 执行 1 选择
-    "QL" / BitsInteger(7),  # 0 缺省
+    "QL" / Default(BitsInteger(7), 0),  # 0 缺省
 )
 
+
+def _encode_cp56time2a(obj, _):
+    now = obj
+    if obj is None:
+        now = datetime.datetime.now()
+    return Container(Year=now.year % 2000,
+                     Month=now.month, Day=now.day,
+                     Week=now.isoweekday(),
+                     Hour=now.hour, SU=0,
+                     Minute=now.minute, IV=0,
+                     Millisecond=now.microsecond // 1000 + now.second * 1000)
+
+
 # 二进制时间
-cp56time2a = "cp56time2a" / ExprAdapter(Struct(
+cp56time2a = "cp56time2a" / ExprAdapter(Default(Struct(
     "Millisecond" / Int16ul,  # 0~59999
     EmbeddedBitStruct(
         "IV" / Default(Bit, 0),  # 0 有效 1 无效
         Padding(1),
-        "Minute" / BitsInteger(6),  # 0~59
+        "Minute" / Default(BitsInteger(6), 0),  # 0~59
         "SU" / Default(Bit, 0),  # 0 标准时间 1 夏季时间
         Padding(2),
-        "Hour" / BitsInteger(5),  # 0~23
-        "Week" / BitsInteger(3),  # 1~7
-        "Day" / BitsInteger(5),  # 1~31
+        "Hour" / Default(BitsInteger(5), 0),  # 0~23
+        "Week" / Default(BitsInteger(3), 0),  # 1~7
+        "Day" / Default(BitsInteger(5), 0),  # 1~31
         Padding(4),
         "Month" / Nibble,  # 1~12
         Padding(1),
-        "Year" / BitsInteger(7),  # 0~99  取年份的后两位 例如: 2015 -> 15
+        "Year" / Default(BitsInteger(7), 0),  # 0~99  取年份的后两位 例如: 2015 -> 15
     )
-),
-    encoder=lambda time, ctx: Container(Year=time.year % 2000,
-                                        Month=time.month, Day=time.day,
-                                        Week=time.isoweekday(),
-                                        Hour=time.hour, SU=0,
-                                        Minute=time.minute, IV=0,
-                                        Millisecond=time.microsecond // 1000 + time.second * 1000),
+), None),
+    encoder=_encode_cp56time2a,
     decoder=lambda obj, ctx: datetime.datetime(year=obj.Year + 2000,
                                                month=obj.Month, day=obj.Day,
                                                hour=obj.Hour,
@@ -276,6 +284,13 @@ cp56time2a = "cp56time2a" / ExprAdapter(Struct(
                                                second=obj.Millisecond // 1000,
                                                microsecond=obj.Millisecond % 1000 * 1000)
 )
+
+
+def _encode_cp24time2a(obj, _):
+    now = obj
+    if obj is None:
+        now = datetime.datetime.now()
+    return Container(Minute=now.minute, IV=0, Millisecond=now.microsecond // 1000 + now.second * 1000)
 
 
 def _decode_cp24time2a(obj, _):
@@ -286,22 +301,21 @@ def _decode_cp24time2a(obj, _):
 
 
 # 二进制时间
-cp24time2a = "cp24time2a" / ExprAdapter(
+cp24time2a = "cp24time2a" / ExprAdapter(Default(
     Struct("Millisecond" / Int16ul,  # 0~59999
            EmbeddedBitStruct(
                "IV" / Default(Bit, 0),  # 0 有效 1 无效
                Padding(1),
-               "Minute" / BitsInteger(6),  # 0~59
-           )),
-    encoder=lambda time, ctx: Container(Minute=time.minute, IV=0,
-                                        Millisecond=time.microsecond // 1000 + time.second * 1000),
+               "Minute" / Default(BitsInteger(6), 0),  # 0~59
+           )), None),
+    encoder=_encode_cp24time2a,
     decoder=_decode_cp24time2a
 )
 
 # 单命令
 SCO = "SCO" / BitStruct(
     "se" / Default(Bit, 0),  # 0 执行 1 选择
-    "QU" / BitsInteger(5),  # 0 无定义 1 短脉冲持续时间 2 长脉冲持续时间 3 持续输出
+    "QU" / Default(BitsInteger(5), 0),  # 0 无定义 1 短脉冲持续时间 2 长脉冲持续时间 3 持续输出
     Padding(1),
     "value" / Default(Bit, 0),  # 单命令状态 0 开 1 合
 )
@@ -309,14 +323,14 @@ SCO = "SCO" / BitStruct(
 # 双命令
 DCO = "DCO" / BitStruct(
     "se" / Default(Bit, 0),  # 0 执行 1 选择
-    "QU" / BitsInteger(5),  # 0 无定义 1 短脉冲持续时间 2 长脉冲持续时间 3 持续输出
+    "QU" / Default(BitsInteger(5), 0),  # 0 无定义 1 短脉冲持续时间 2 长脉冲持续时间 3 持续输出
     "value" / Default(BitsInteger(2), 0),  # 双命令状态 0 不允许 1 开 2 合 3 不允许
 )
 
 # 步调节命令
 RCO = "RCO" / BitStruct(
     "se" / Default(Bit, 0),  # 0 执行 1 选择
-    "QU" / BitsInteger(5),  # 0 无定义 1 短脉冲持续时间 2 长脉冲持续时间 3 持续输出
+    "QU" / Default(BitsInteger(5), 0),  # 0 无定义 1 短脉冲持续时间 2 长脉冲持续时间 3 持续输出
     "value" / Default(BitsInteger(2), 0),  # 双命令状态 0 不允许 1 降一步 2 升一步 3 不允许
 )
 
@@ -421,9 +435,10 @@ ASDU_M_ME_TC_1 = "ASDU_M_ME_TC_1" / Struct(
     cp24time2a,
 )
 
+
 # 15 累计量
 ASDU_M_IT_NA_1 = "ASDU_M_IT_NA_1" / Struct(
-    EmbeddedBitStruct(If(this._._.sq == 0, "address" / Default(BitsInteger(24, swapped=True), 0))),
+    EmbeddedBitStruct("address" / If(this._._.sq == 0, Default(BitsInteger(24, swapped=True), 0))),
     Embedded(BCR),
 )
 
@@ -436,7 +451,7 @@ ASDU_M_IT_TA_1 = "ASDU_M_IT_TA_1" / Struct(
 
 # 20 具有状态变位检出的成组单点信息
 ASDU_M_PS_NA_1 = "ASDU_M_PS_NA_1" / Struct(
-    EmbeddedBitStruct(If(this._._.sq == 0, "address" / Default(BitsInteger(24, swapped=True), 0))),
+    EmbeddedBitStruct("address" / If(this._._.sq == 0, Default(BitsInteger(24, swapped=True), 0))),
     "value" / Default(Int16ul, 0),  # 每一位 0 开 1 合
     "CD" / Int16ul,  # 每一位 0 ST对应位未改变 1 ST对应位有改变
     Embedded(QDS),
@@ -444,7 +459,7 @@ ASDU_M_PS_NA_1 = "ASDU_M_PS_NA_1" / Struct(
 
 # 21 测量值，不带品质描述的归一化值
 ASDU_M_ME_ND_1 = "ASDU_M_ME_ND_1" / Struct(
-    EmbeddedBitStruct(If(this._._.sq == 0, "address" / Default(BitsInteger(24, swapped=True), 0))),
+    EmbeddedBitStruct("address" / If(this._._.sq == 0, Default(BitsInteger(24, swapped=True), 0))),
     "value" / Default(Int16ul, 0),
 )
 
@@ -664,7 +679,7 @@ ASDU_Part = "ASDU" / Struct(
     # ),
     # ASDU公共地址
     "GlobalAddress" / Default(Int16ul, 1),  # 0 未用 1~65534 站地址 65535 全局地址
-    If(this.sq == 1, "StartAddress" / Default(BytesInteger(3, swapped=True), 0)),
+    "StartAddress" / Default(If(this.sq == 1, BytesInteger(3, swapped=True)), 0),
     # 信息对象
     "data" / Default(Array(this.sq_count, Switch(lambda ctx: ctx.TYP.name, typ_dict, Pass)), [{}])
 )
@@ -675,9 +690,35 @@ iec_head = "iec104_head" / Struct(
 )
 
 
-iec_104 = "iec104" / Struct(
+class CalcLength(Tunnel):
+    def _decode(self, data, context):
+        return data
+
+    def _encode(self, data, context):
+        return b"\x68%c%b" % (len(data) - 2, data[2:])
+
+
+class If2(Construct):
+    __slots__ = ["build_func", "parse_func", "true_part"]
+
+    def __init__(self, build_func, parse_func, true_part):
+        super(If2, self).__init__()
+        self.build_func = build_func
+        self.parse_func = parse_func
+        self.true_part = true_part
+
+    def _build(self, obj, stream, context, path):
+        if self.build_func(context):
+            return self.true_part._build(obj, stream, context, path)
+
+    def _parse(self, stream, context, path):
+        if self.parse_func(context):
+            return self.true_part._parse(stream, context, path)
+
+
+iec_104 = "iec104" / CalcLength(Struct(
     Const(b"\x68"),
-    "length" / Rebuild(Byte, lambda ctx: 4+int(len(ctx.ASDU) if 'ASDU' in ctx else 0)),
+    "length" / Default(Byte, 1),
     "APCI1" / ExprAdapter(
         Default(Int16ul, None),
         encoder=lambda obj, ctx: obj if isinstance(obj, UFrame) else 1 if obj == "S" else obj << 1,
@@ -689,5 +730,8 @@ iec_104 = "iec104" / Struct(
         decoder=lambda obj, ctx: obj >> 1,
     ),
     # Only I-frame has ASDU part, S-frame and U-frame doesn't
-    If(lambda ctx: not isinstance(ctx.APCI1, UFrame) and ctx.APCI1 != 'S', ASDU_Part)
-)
+    "ASDU" / Default(If2(
+        lambda ctx: not isinstance(ctx.APCI1, UFrame) and ctx.APCI1 != 1,
+        lambda ctx: not isinstance(ctx.APCI1, UFrame) and ctx.APCI1 != "S",
+        ASDU_Part), None)
+))

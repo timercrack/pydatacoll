@@ -120,20 +120,21 @@ CREATE TABLE test_db_save(
         self.redis_client.publish(
                 'CHANNEL:DEVICE_ADD', json.dumps({'id': 0, 'name': '测试集中器0', 'ip': '127.0.0.1',
                                                   'port': 2404, 'protocol': 'iec104'}))
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/devices', data=json.dumps(device_list)) as r:
-            self.assertEqual(r.status, 200)
-        logger.info('create term..')
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/terms', data=json.dumps(term_list)) as r:
-            self.assertEqual(r.status, 200)
-        logger.info('create item..')
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/items', data=json.dumps(item_list)) as r:
-            self.assertEqual(r.status, 200)
-        logger.info('create formula..')
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/formulas', data=json.dumps(formula_list)) as r:
-            self.assertEqual(r.status, 200)
-        logger.info('create term_item..')
-        async with aiohttp.post('http://127.0.0.1:8080/api/v2/term_items', data=json.dumps(term_item_list)) as r:
-            self.assertEqual(r.status, 200)
+        async with aiohttp.ClientSession() as ss:
+            async with ss.post('http://127.0.0.1:8080/api/v2/devices', json=device_list) as r:
+                self.assertEqual(r.status, 200)
+            logger.info('create term..')
+            async with ss.post('http://127.0.0.1:8080/api/v2/terms', json=term_list) as r:
+                self.assertEqual(r.status, 200)
+            logger.info('create item..')
+            async with ss.post('http://127.0.0.1:8080/api/v2/items', json=item_list) as r:
+                self.assertEqual(r.status, 200)
+            logger.info('create formula..')
+            async with ss.post('http://127.0.0.1:8080/api/v2/formulas', json=formula_list) as r:
+                self.assertEqual(r.status, 200)
+            logger.info('create term_item..')
+            async with ss.post('http://127.0.0.1:8080/api/v2/term_items', json=term_item_list) as r:
+                self.assertEqual(r.status, 200)
         logger.info('done.')
         device = DeviceManager.device_dict['0']
         await device.data_link_established

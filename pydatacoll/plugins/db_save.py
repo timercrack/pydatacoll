@@ -107,5 +107,6 @@ class DBSaver(BaseModule):
         except Exception as ee:
             logger.error('save_mysql failed: %s', repr(ee), exc_info=True)
 
+
 if __name__ == '__main__':
     DBSaver.run()

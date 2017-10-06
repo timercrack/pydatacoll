@@ -141,11 +141,11 @@ class IEC104Device:
 
     def on_timer2(self):
         logger.debug('device[%s] T2 timeout, send S_frame(rsn=%s)', self.device_id, self.rsn)
-        self.io_loop.create_task(self.send_frame(iec_104.init_frame("S", self.rsn)))
+        self.io_loop.create_task(self.send_frame(Container(APCI1="S", APCI2=self.rsn)))
 
     def on_timer3(self):
         logger.debug('device[%s] T3 timeout, send heartbeat', self.device_id)
-        self.test_act_handler = self.io_loop.create_task(self.send_frame(iec_104.init_frame(UFrame.TESTFR_ACT)))
+        self.test_act_handler = self.io_loop.create_task(self.send_frame(Container(APCI1=UFrame.TESTFR_ACT)))
 
     async def handle_u(self, frame):
         try:
@@ -160,7 +160,7 @@ class IEC104Device:
                     self.stop_timer(IECParam.T1)
                     self.start_act_handler.cancel()
                     self.start_act_handler = None
-                await self.send_frame(iec_104.init_frame(UFrame.STARTDT_CON))
+                await self.send_frame(Container(APCI1=UFrame.STARTDT_CON))
                 self.io_loop.create_task(self.check_to_send(frame))
             elif frame.APCI1 == UFrame.STARTDT_CON:
                 self.io_loop.create_task(self.check_to_send(frame))
@@ -174,11 +174,11 @@ class IEC104Device:
                     self.stop_timer(IECParam.T1)
                     self.test_act_handler.cancel()
                     self.test_act_handler = None
-                await self.send_frame(iec_104.init_frame(UFrame.TESTFR_CON))
+                await self.send_frame(Container(APCI1=UFrame.TESTFR_CON))
             elif frame.APCI1 == UFrame.TESTFR_CON:
                 self.io_loop.create_task(self.check_to_send(frame))
             elif frame.APCI1 == UFrame.STOPDT_ACT:
-                await self.send_frame(iec_104.init_frame(UFrame.STOPDT_CON))
+                await self.send_frame(Container(APCI1=UFrame.STOPDT_CON))
                 logger.debug("device[%s] receive STOPDT_ACT.", self.device_id)
             elif frame.APCI1 == UFrame.STOPDT_CON:
                 self.stop_timer(IECParam.T1)
@@ -228,7 +228,8 @@ class IEC104Device:
                     logger.debug('term_item_dict=%s', term_item_dict)
                     typ = TYP(int(term_item_dict['code_type']))
                     address = int(term_item_dict['protocol_code'])
-                    send_frame = iec_104.init_frame(self.ssn, self.rsn, typ, Cause.req)
+                    send_frame = Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+                        TYP=typ, Cause=Cause.req, data=[Container()]))
                     send_frame.ASDU.data[0].value = str_to_number(value) or random.uniform(100, 200)
                     send_frame.ASDU.data[0].address = address
                     logger.debug('C_RD_NA_1, send_frame=%s', send_frame)
@@ -239,7 +240,7 @@ class IEC104Device:
 
             if self.w == IECParam.W:
                 logger.debug("self.w,Param_S=%s, send S_frame", (self.w, IECParam.W.value))
-                await self.send_frame(iec_104.init_frame("S", self.rsn))
+                await self.send_frame(Container(APCI1="S", APCI2=self.rsn))
         except Exception as e:
             logger.error("device[%s] handle_i failed: %s", self.device_id, repr(e), exc_info=True)
 
@@ -253,7 +254,7 @@ class IEC104Device:
             if frame.APCI1 == "S":
                 self.stop_timer(IECParam.T2)
                 frame.APCI2 = self.rsn
-                encode_frame = iec_104.build_isu(frame)
+                encode_frame = iec_104.build(frame)
                 self.writer.write(encode_frame)
                 await self.writer.drain()
                 self.w = 0
@@ -261,7 +262,7 @@ class IEC104Device:
             # send U
             elif isinstance(frame.APCI1, UFrame):
                 if not check or not self.send_list:
-                    encode_frame = iec_104.build_isu(frame)
+                    encode_frame = iec_104.build(frame)
                     self.writer.write(encode_frame)
                     await self.writer.drain()
                     stream_write = True
@@ -280,7 +281,7 @@ class IEC104Device:
                     self.stop_timer(IECParam.T2)
                     frame.APCI1 = self.ssn
                     frame.APCI2 = self.rsn
-                    encode_frame = iec_104.build_isu(frame)
+                    encode_frame = iec_104.build(frame)
                     while self.k >= IECParam.K:
                         logger.debug('device[%s] self.k,ParamK=%s, wait S..', self.device_id, (self.k, IECParam.K))
                         if self.k_decreased.done():
@@ -351,14 +352,15 @@ class IEC104Device:
                 value = None
                 if up_limit:
                     value = random.randint(str_to_number(down_limit), str_to_number(up_limit))
-                frame = iec_104.init_frame(self.ssn, self.rsn, TYP(typ), Cause.introgen)
+                frame = Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+                    TYP=TYP(typ), Cause=Cause.introgen, data=[Container()]))
                 frame.ASDU.StartAddress = address
                 frame.ASDU.data[0].address = address
                 frame.ASDU.data[0].value = value or random.randint(100, 200)
-                if hasattr(frame.ASDU.data[0], 'cp56time2a'):
-                    frame.ASDU.data[0].cp56time2a = datetime.datetime.now()
-                if hasattr(frame.ASDU.data[0], 'cp24time2a'):
-                    frame.ASDU.data[0].cp24time2a = datetime.datetime.now()
+                # if hasattr(frame.ASDU.data[0], 'cp56time2a'):
+                #     frame.ASDU.data[0].cp56time2a = datetime.datetime.now()
+                # if hasattr(frame.ASDU.data[0], 'cp24time2a'):
+                #     frame.ASDU.data[0].cp24time2a = datetime.datetime.now()
                 await self.send_frame(frame)
         except Exception as e:
             logger.error("device[%s] generate_call_all_data failed: %s", self.device_id, repr(e), exc_info=True)
@@ -398,6 +400,7 @@ def run_server():
             loop.run_until_complete(server.wait_closed())
         loop.close()
     print('mock device stopped.')
+
 
 if __name__ == '__main__':
     run_server()

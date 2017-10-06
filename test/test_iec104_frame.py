@@ -20,30 +20,28 @@ i_big = b"\x68\xfa\xd2\x00\x06\x00\x0f\x1e\x25\x00\x01\x00\xd3\x64\x00\x1e\x00\x
 
 class IEC104Test(unittest.TestCase):
     def test_M_SP_NA_1(self):
-        frame = Container(APCI1=1, APCI2=2, Cause=Cause.introgen, ASDU=Container())
+        frame = Container(APCI1=1, APCI2=2, ASDU=Container())
         frame.ASDU.data = [Container()]
         frame.ASDU.TYP = TYP.M_SP_NA_1
+        frame.ASDU.Cause = Cause.introgen
         frame.ASDU.StartAddress = 10
         frame.ASDU.data[0].address = 5
         frame.ASDU.data[0].value = 1
-        print('frame=', frame)
         build = iec_104.build(frame)
-        print('build=', build.hex())
         parse = iec_104.parse(build)
-        print('parse=', parse)
+        self.assertEqual(parse.length, len(build)-2)
         rebuild = iec_104.build(parse)
-        print('rebuild=', rebuild.hex())
         self.assertEqual(build, rebuild)
         self.assertEqual(frame.ASDU.data[0].value, parse.ASDU.data[0].value)
 
     def test_parse_u(self):
         frame = iec_104.parse(u_bin)
-        # print "parsed Frame=%s" % frame
+        # print("parsed Frame=", frame)
         self.assertEqual(frame.APCI1, UFrame.STARTDT_ACT)
 
     def test_parse_s(self):
         frame = iec_104.parse(s_bin)
-        # print "parsed Frame=%s" % frame
+        # print("parsed Frame=", frame)
         self.assertEqual(frame.APCI1, "S")
 
     def test_parse_i(self):
@@ -52,34 +50,29 @@ class IEC104Test(unittest.TestCase):
         self.assertEqual(frame.ASDU.TYP, TYP.C_CI_NA_1)
 
     def test_build_u(self):
-        c = iec_104.init_frame(UFrame.STARTDT_ACT)
-        print(c)
-        frame = iec_104.build(c)
-        # print "built U frame=%s" % frame.encode('hex')
+        frame = iec_104.build(dict(APCI1=UFrame.STARTDT_ACT))
+        # print("built U frame=", frame.hex())
         self.assertEqual(frame, u_bin)
 
     def test_build_s(self):
-        c = iec_104.init_frame("S", 74)
-        frame = iec_104.build_isu(c)
-        # print "built S frame=%s" % frame.encode('hex')
+        frame = iec_104.build(Container(APCI1="S", APCI2=74))
+        # print("built S frame=", frame.hex())
         self.assertEqual(frame, s_bin)
 
     def test_build_C_CI_NA1(self):
         i_frame = iec_104.parse(i_bin)
-        c = iec_104.init_frame(i_frame.APCI1, i_frame.APCI2, TYP.C_CI_NA_1)
-        c.ASDU.Cause = Cause.actterm
-        c.ASDU.GlobalAddress = i_frame.ASDU.GlobalAddress
-        # c.ASDU.data[0].RQT = i_frame.ASDU.data[0].RQT
-        frame = iec_104.build_isu(c)  # 使用 build_isu 组装I帧
+        frame = iec_104.build(Container(
+            APCI1=i_frame.APCI1, APCI2=i_frame.APCI2, ASDU=Container(
+                TYP=TYP.C_CI_NA_1, Cause=Cause.actterm, GlobalAddress=i_frame.ASDU.GlobalAddress)))
         self.assertEqual(frame, i_bin)
 
     def test_build_C_SE_TC_1(self):
-        c = iec_104.init_frame(105, 3, TYP.C_SE_TC_1)
-        frame = iec_104.build_isu(c)
-        # print "built C_SE_TC_1 frame=%s" % frame.encode('hex')
+        frame = iec_104.build(Container(APCI1=105, APCI2=3, ASDU=Container(TYP=TYP.C_SE_TC_1)))
+        # print("built C_SE_TC_1 frame=", frame.hex())
         parse = iec_104.parse(frame)
-        re_build = iec_104.build_isu(parse)
-        # print "rebuilt C_SE_TC_1 frame=%s" % re_build.encode('hex')
+        # print("parse C_SE_TC_1 frame=", parse)
+        re_build = iec_104.build(parse)
+        # print("rebuilt C_SE_TC_1 frame=", re_build.hex())
         self.assertEqual(frame, re_build)
 
     def test_M_SP_TB_1(self):
@@ -87,36 +80,33 @@ class IEC104Test(unittest.TestCase):
         soe_frame = iec_104.parse(soe_bin)
         # print("parse=", soe_frame)
         self.assertEqual(soe_frame.ASDU.data[0].cp56time2a, time)
-        frame = iec_104.init_frame(soe_frame.APCI1, soe_frame.APCI2, TYP.M_SP_TB_1)
-        frame.ASDU.Cause = soe_frame.ASDU.Cause.spont
-        frame.ASDU.GlobalAddress = soe_frame.ASDU.GlobalAddress
-        frame.ASDU.data[0].address = soe_frame.ASDU.data[0].address
-        frame.ASDU.data[0].cp56time2a = time
-        # print('frame=', frame)
-        build = iec_104.build_isu(frame)
+        build = iec_104.build(Container(APCI1=soe_frame.APCI1, APCI2=soe_frame.APCI2, ASDU=Container(
+            TYP=TYP.M_SP_TB_1, Cause=soe_frame.ASDU.Cause.spont, GlobalAddress=soe_frame.ASDU.GlobalAddress,
+            data=[Container(address=soe_frame.ASDU.data[0].address, cp56time2a=time)]
+        )))
         # print("build=", build.hex())
         # print("soe  =", soe_bin.hex())
         self.assertEqual(build, soe_bin)
 
     def test_parse_big(self):
         frame = iec_104.parse(i_big)
-        # print "parsed Frame=%s" % frame
+        # print("parsed Frame=", frame)
         self.assertEqual(frame.ASDU.TYP, TYP.M_IT_NA_1)
 
     def test_build_big(self):
-        # print 'before=%s' % i_big.encode('hex')
         frame = iec_104.parse(i_big)
-        # print('parse=', frame)
-        c = iec_104.init_frame(frame.APCI1, frame.APCI2, frame.ASDU.TYP, sq_count=frame.ASDU.sq_count)
-        c.ASDU.Cause = frame.ASDU.Cause
-        c.ASDU.GlobalAddress = frame.ASDU.GlobalAddress
+        c = Container(APCI1=frame.APCI1, APCI2=frame.APCI2, ASDU=Container(
+            TYP=frame.ASDU.TYP, sq_count=frame.ASDU.sq_count, Cause=frame.ASDU.Cause,
+            GlobalAddress=frame.ASDU.GlobalAddress, data=[]
+        ))
         for idx in range(frame.ASDU.sq_count):
-            c.ASDU.data[idx].address = frame.ASDU.data[idx].address
-            c.ASDU.data[idx].value = frame.ASDU.data[idx].value
-            c.ASDU.data[idx].sq = frame.ASDU.data[idx].sq
-        # print('parse2=', c)
-        re_build = iec_104.build_isu(c)  # 使用 build_isu 组装I帧
-        # print "built big frame=%s" % re_build.encode('hex')
+            data = Container(
+                address=frame.ASDU.data[idx].address,
+                value=frame.ASDU.data[idx].value,
+                sq=frame.ASDU.data[idx].sq
+            )
+            c.ASDU.data.append(data)
+        re_build = iec_104.build(c)
         self.assertEqual(re_build, i_big)
 
     def test_build_asdu(self):
@@ -137,16 +127,16 @@ class IEC104Test(unittest.TestCase):
     def test_build_bad(self):
         with self.assertRaises(Exception):
             cc = Container(TYP=TYP.C_CI_NA_1)
-            iec_104.build_isu(cc)
+            iec_104.build(cc)
 
     def test_continuous(self):
-        c = iec_104.init_frame(166, 7, TYP.M_IT_NA_1, sq_count=5, sq=1)
-        c.ASDU.StartAddress = 50
+        c = Container(APCI1=166, APCI2=7, ASDU=Container(
+            TYP=TYP.M_IT_NA_1, sq=1, sq_count=5, StartAddress=50, data=[]))
         for idx in range(5):
-            c.ASDU.data[idx].value = idx + 100
-            c.ASDU.data[idx].sq = idx
+            data = Container(value=idx + 100, sq=idx)
+            c.ASDU.data.append(data)
         # print("before build=", c)
-        build = iec_104.build_isu(c)  # 使用 build_isu 组装I帧
+        build = iec_104.build(c)
         # print("build=", build.hex())
         parse = iec_104.parse(build)
         # print("parse=", parse)

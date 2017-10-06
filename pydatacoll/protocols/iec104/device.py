@@ -66,7 +66,7 @@ class IEC104Device(BaseDevice):
             self.connect_handler = None
             self.change_device_status(on_line=True)
             self.receive_handler = self.io_loop.create_task(self.receive())
-            await self.send_frame(iec_104.init_frame(UFrame.STARTDT_ACT))
+            await self.send_frame(Container(APCI1=UFrame.STARTDT_ACT))
         except asyncio.TimeoutError:
             logger.debug('device[%s] connect timeout, try reconnect..', self.device_id)
             self.disconnect(reconnect=True)
@@ -139,12 +139,12 @@ class IEC104Device(BaseDevice):
 
     def on_timer2(self):
         logger.debug('device[%s] T2 timeout, send S_frame(rsn=%s)', self.device_id, self.rsn)
-        self.io_loop.create_task(self.send_frame(iec_104.init_frame("S", self.rsn)))
+        self.io_loop.create_task(self.send_frame(Container(APCI1="S", APCI2=self.rsn)))
 
     def on_timer3(self):
         logger.debug('device[%s] T3 timeout, send heartbeat', self.device_id)
         if self.reconnect_handler is None:
-            self.test_act_handler = self.io_loop.create_task(self.send_frame(iec_104.init_frame(UFrame.TESTFR_ACT)))
+            self.test_act_handler = self.io_loop.create_task(self.send_frame(Container(APCI1=UFrame.TESTFR_ACT)))
 
     async def receive(self):
         try:
@@ -223,7 +223,7 @@ class IEC104Device(BaseDevice):
                     self.stop_timer(IECParam.T1)
                     self.start_act_handler.cancel()
                     self.start_act_handler = None
-                await self.send_frame(iec_104.init_frame(UFrame.STARTDT_CON))
+                await self.send_frame(Container(APCI1=UFrame.STARTDT_CON))
                 self.coll_task_handler = self.io_loop.call_later(
                         self.coll_interval.total_seconds(), lambda: self.io_loop.create_task(self.run_task()))
                 logger.info('device[%s] call task will begin at %s', self.device_id,
@@ -249,11 +249,11 @@ class IEC104Device(BaseDevice):
                     self.stop_timer(IECParam.T1)
                     self.test_act_handler.cancel()
                     self.test_act_handler = None
-                await self.send_frame(iec_104.init_frame(UFrame.TESTFR_CON))
+                await self.send_frame(Container(APCI1=UFrame.TESTFR_CON))
             elif frame.APCI1 == UFrame.TESTFR_CON:
                 self.io_loop.create_task(self.check_to_send(frame))
             elif frame.APCI1 == UFrame.STOPDT_ACT:
-                await self.send_frame(iec_104.init_frame(UFrame.STOPDT_CON))
+                await self.send_frame(Container(APCI1=UFrame.STOPDT_CON))
                 logger.debug("device[%s] receive STOPDT_ACT.", self.device_id)
                 self.disconnect()
             elif frame.APCI1 == UFrame.STOPDT_CON:
@@ -271,7 +271,7 @@ class IEC104Device(BaseDevice):
                          (frame.ASDU.TYP.name, frame.ASDU.Cause.name), frame.ASDU.sq_count)
             if self.w >= IECParam.W:
                 logger.debug("self.w,Param_S=%s, send S_frame", (self.w, IECParam.W.value))
-                await self.send_frame(iec_104.init_frame("S", self.rsn))
+                await self.send_frame(Container(APCI1="S", APCI2=self.rsn))
             if frame.ASDU.Cause in (Cause.actcon, Cause.req, Cause.actterm, Cause.deactcon):
                 self.stop_timer(IECParam.T1)
                 self.io_loop.create_task(self.check_to_send(frame))
@@ -335,7 +335,7 @@ class IEC104Device(BaseDevice):
             if frame.APCI1 == "S":
                 self.stop_timer(IECParam.T2)
                 frame.APCI2 = self.rsn
-                encode_frame = iec_104.build_isu(frame)
+                encode_frame = iec_104.build(frame)
                 self.writer.write(encode_frame)
                 await self.writer.drain()
                 self.w = 0
@@ -343,7 +343,7 @@ class IEC104Device(BaseDevice):
             # send U
             elif isinstance(frame.APCI1, UFrame):
                 if not check or not self.send_list:
-                    encode_frame = iec_104.build_isu(frame)
+                    encode_frame = iec_104.build(frame)
                     self.writer.write(encode_frame)
                     await self.writer.drain()
                     stream_write = True
@@ -362,7 +362,7 @@ class IEC104Device(BaseDevice):
                     self.stop_timer(IECParam.T2)
                     frame.APCI1 = self.ssn
                     frame.APCI2 = self.rsn
-                    encode_frame = iec_104.build_isu(frame)
+                    encode_frame = iec_104.build(frame)
                     while self.k >= IECParam.K:
                         logger.debug('device[%s] self.k,ParamK=%s, wait S..', self.device_id, (self.k, IECParam.K))
                         if self.k_decreased.done():
@@ -424,11 +424,14 @@ class IEC104Device(BaseDevice):
                 self.all_data_called = asyncio.futures.Future(loop=self.io_loop)
             if self.power_data_called.done():
                 self.power_data_called = asyncio.futures.Future(loop=self.io_loop)
-            await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CS_NA_1, Cause.act))
+            await self.send_frame(Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+                TYP=TYP.C_CS_NA_1, Cause=Cause.act)))
             await self.time_synced
-            await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_IC_NA_1, Cause.act))
+            await self.send_frame(Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+                TYP=TYP.C_IC_NA_1, Cause=Cause.act)))
             await self.all_data_called
-            await self.send_frame(iec_104.init_frame(self.ssn, self.rsn, TYP.C_CI_NA_1, Cause.act))
+            await self.send_frame(Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+                TYP=TYP.C_CI_NA_1, Cause=Cause.act)))
             await self.power_data_called
             self.last_call_all_time_end = datetime.datetime.now()
             spent = self.last_call_all_time_end - self.last_call_all_time_begin
@@ -446,12 +449,14 @@ class IEC104Device(BaseDevice):
         pass
 
     def prepare_call_frame(self, term_item_dict):
-        frame = iec_104.init_frame(self.ssn, self.rsn, TYP.C_RD_NA_1, Cause.req)  # 102 读命令
+        frame = Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+            TYP=TYP.C_RD_NA_1, Cause=Cause.req, data=[Container()]))  # 102 读命令
         frame.ASDU.data[0].address = int(term_item_dict['protocol_code'])
         return frame
 
     def prepare_ctrl_frame(self, term_item_dict, value):
-        frame = iec_104.init_frame(self.ssn, self.rsn, TYP(int(term_item_dict['code_type'])), Cause.act)
+        frame = Container(APCI1=self.ssn, APCI2=self.rsn, ASDU=Container(
+            TYP=TYP(int(term_item_dict['code_type'])), Cause=Cause.act, data=[Container()]))
         frame.ASDU.data[0].address = int(term_item_dict['protocol_code'])
         frame.ASDU.data[0].value = value
         frame.ASDU.data[0].se = 1
