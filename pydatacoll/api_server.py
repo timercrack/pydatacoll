@@ -114,9 +114,14 @@ class APIServer(ParamFunctionContainer):
         doc_list = ['PyDataColl is running, available API:\n']
         method_dict = defaultdict(list)
         for route in self.web_app.router.routes():
+            if hasattr(route, 'resource'):
+                _path = route.resource._formatter if hasattr(route.resource, '_formatter')\
+                    else route.resource._path
+            else:
+                _path = route._formatter if hasattr(route, '_formatter')\
+                    else route._path
             method_dict[route.method].append('method: {:<8} URL: {}://{}{}'.format(
-                    route.method, request.scheme, request.host, route._formatter if hasattr(route, '_formatter') else
-                    route._path))
+                    route.method, request.scheme, request.host, _path))
         doc_list.append('\n'.join(sorted(method_dict['GET'])))
         doc_list.append('\n'.join(sorted(method_dict['POST'])))
         doc_list.append('\n'.join(sorted(method_dict['PUT'])))
